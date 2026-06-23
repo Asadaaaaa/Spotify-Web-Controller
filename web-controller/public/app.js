@@ -37,15 +37,26 @@ document.addEventListener('DOMContentLoaded', () => {
     const searchNoResults = document.getElementById('search-no-results');
     const searchResultsList = document.getElementById('search-results-list');
 
-    // Queue Elements
+    // Queue Elements (sidebar)
     const queueCurrentItem = document.getElementById('queue-current-item');
     const queueUserTitle = document.getElementById('queue-user-title');
     const queueUserList = document.getElementById('queue-user-list');
     const queueContextTitle = document.getElementById('queue-context-title');
     const queueContextList = document.getElementById('queue-context-list');
     const queueDrawer = document.getElementById('queue-drawer');
-    const btnToggleQueue = document.getElementById('btn-toggle-queue');
-    const btnCloseQueue = document.getElementById('btn-close-queue');
+
+    // Queue Modal Elements (bottom-sheet for small screens)
+    const queueModalOverlay = document.getElementById('queue-modal-overlay');
+    const queueModalCurrentItem = document.getElementById('queue-modal-current-item');
+    const queueModalUserTitle = document.getElementById('queue-modal-user-title');
+    const queueModalUserList = document.getElementById('queue-modal-user-list');
+    const queueModalContextTitle = document.getElementById('queue-modal-context-title');
+    const queueModalContextList = document.getElementById('queue-modal-context-list');
+    const btnQueueModal = document.getElementById('btn-queue-modal');
+    const btnCloseQueueModal = document.getElementById('btn-close-queue-modal');
+
+
+
 
     // Search Results Overlay
     const searchResultsOverlay = document.getElementById('search-results-overlay');
@@ -85,24 +96,33 @@ document.addEventListener('DOMContentLoaded', () => {
         return uri;
     }
 
-
-    // --- Drawer & Overlay Toggle Handlers ---
-    btnToggleQueue.addEventListener('click', () => {
-        queueDrawer.classList.toggle('open');
-        btnToggleQueue.classList.toggle('active');
-    });
-
-    btnCloseQueue.addEventListener('click', () => {
-        queueDrawer.classList.remove('open');
-        btnToggleQueue.classList.remove('active');
-    });
-
     // Close search suggestions when clicking outside
     document.addEventListener('click', (e) => {
         const searchContainer = document.querySelector('.search-bar-container');
         if (searchContainer && !searchContainer.contains(e.target)) {
             searchResultsOverlay.classList.remove('open');
         }
+    });
+
+    // --- Queue Modal Handlers ---
+    function openQueueModal() {
+        queueModalOverlay.classList.add('open');
+        btnQueueModal.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeQueueModal() {
+        queueModalOverlay.classList.remove('open');
+        btnQueueModal.classList.remove('active');
+        document.body.style.overflow = '';
+    }
+
+    btnQueueModal.addEventListener('click', openQueueModal);
+    btnCloseQueueModal.addEventListener('click', closeQueueModal);
+
+    // Close modal when clicking on the overlay backdrop
+    queueModalOverlay.addEventListener('click', (e) => {
+        if (e.target === queueModalOverlay) closeQueueModal();
     });
 
     // --- WebSocket Connection ---
@@ -484,24 +504,11 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderSearchResults(data) {
         searchLoading.style.display = 'none';
 
-        if (data.error) {
-            console.error('Search error from server:', data.error);
-            searchResultsList.innerHTML = `<div class="search-state-message"><p>Error searching: ${data.error}</p></div>`;
-            return;
-        }
-
-        if (!data.tracks || data.tracks.length === 0) {
-            searchNoResults.style.display = 'flex';
-            return;
-        }
-
-        searchResultsList.innerHTML = '';
-        data.tracks.forEach(track => {
+        // Helper to build a single track item DOM element
+        function buildTrackItem(track) {
             const trackItem = document.createElement('div');
             trackItem.className = 'track-item';
-
             const artUrl = getImageUrl(track.albumArt) || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=50';
-
             trackItem.innerHTML = `
                 <div class="track-item-left">
                     <img class="track-item-art" src="${artUrl}" alt="Album Art">
@@ -520,20 +527,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     </button>
                 </div>
             `;
-
-            // Play Now Action
             trackItem.querySelector('.btn-play-now').addEventListener('click', (e) => {
                 e.stopPropagation();
-                // Play instantly using Cosmos/GraphQL playUri command
                 sendCommand('play_track', track.uri);
+                searchResultsOverlay.classList.remove('open');
             });
-
-            // Add to Queue Action
             trackItem.querySelector('.btn-add-queue').addEventListener('click', (e) => {
                 e.stopPropagation();
                 sendCommand('add_queue', track.uri);
-
-                // Show floating checkmark animation
                 const icon = e.currentTarget.querySelector('i');
                 icon.className = 'fa-solid fa-check';
                 icon.style.color = '#1ed760';
@@ -542,9 +543,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     icon.style.color = '';
                 }, 1500);
             });
+            return trackItem;
+        }
 
-            searchResultsList.appendChild(trackItem);
-        });
+        if (data.error) {
+            searchResultsList.innerHTML = `<div class="search-state-message"><p>Error: ${data.error}</p></div>`;
+            return;
+        }
+        if (!data.tracks || data.tracks.length === 0) {
+            searchNoResults.style.display = 'flex';
+            return;
+        }
+        searchResultsList.innerHTML = '';
+        data.tracks.forEach(track => searchResultsList.appendChild(buildTrackItem(track)));
     }
 
     // --- Queue Features ---
@@ -699,6 +710,58 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!hasUserQueue && !hasContextQueue) {
             queueContextList.style.display = 'flex';
             queueContextList.innerHTML = '<div class="search-state-message" style="padding:40px"><p>Queue is empty</p></div>';
+        }
+
+        // --- Sync queue data to the modal (bottom-sheet) ---
+        if (queueData.current) {
+            const artUrl = getImageUrl(queueData.current.albumArt) || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=50';
+            queueModalCurrentItem.innerHTML = `
+                <div class="track-item" style="background: rgba(30, 215, 96, 0.08); border-color: rgba(30, 215, 96, 0.2)">
+                    <div class="track-item-left">
+                        <img class="track-item-art" src="${artUrl}" alt="Album Art">
+                        <div class="track-item-details">
+                            <span class="track-item-title">${queueData.current.title}</span>
+                            <span class="track-item-artist">${queueData.current.artist}</span>
+                        </div>
+                    </div>
+                    <div class="track-item-right">
+                        <span class="track-duration" style="color: var(--primary)">Playing</span>
+                    </div>
+                </div>
+            `;
+        } else {
+            queueModalCurrentItem.innerHTML = '<div class="search-state-message" style="padding:20px"><p>No track playing</p></div>';
+        }
+
+        if (hasUserQueue) {
+            queueModalUserTitle.style.display = 'block';
+            queueModalUserList.style.display = 'flex';
+            queueModalUserList.innerHTML = '';
+            queueData.nextInQueue.forEach((track, index) => {
+                queueModalUserList.appendChild(createTrackItem(track, index, true));
+            });
+        } else {
+            queueModalUserTitle.style.display = 'none';
+            queueModalUserList.style.display = 'none';
+            queueModalUserList.innerHTML = '';
+        }
+
+        if (hasContextQueue) {
+            queueModalContextTitle.style.display = 'block';
+            queueModalContextList.style.display = 'flex';
+            queueModalContextList.innerHTML = '';
+            queueData.nextUp.forEach((track, index) => {
+                queueModalContextList.appendChild(createTrackItem(track, index, false));
+            });
+        } else {
+            queueModalContextTitle.style.display = 'none';
+            queueModalContextList.style.display = 'none';
+            queueModalContextList.innerHTML = '';
+        }
+
+        if (!hasUserQueue && !hasContextQueue) {
+            queueModalContextList.style.display = 'flex';
+            queueModalContextList.innerHTML = '<div class="search-state-message" style="padding:40px"><p>Queue is empty</p></div>';
         }
 
         // Add dragover reordering on the queue wrapper

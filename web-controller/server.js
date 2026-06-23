@@ -67,12 +67,6 @@ class SpotifyWebControllerServer {
         ws.on('message', (message) => {
             try {
                 const parsed = JSON.parse(message);
-                if (parsed.type === 'search_results') {
-                    console.log('SEARCH RESULTS:', JSON.stringify(parsed.data, null, 2));
-                }
-                if (parsed.type === 'debug') {
-                    console.log('DEBUG:', JSON.stringify(parsed.data, null, 2));
-                }
                 // Relay everything from Spotify to all Web Clients
                 this.broadcastToClients(parsed);
             } catch (err) {

@@ -49,7 +49,7 @@
             </div>
 
             <!-- Integrated Search Bar (At the Top) -->
-            <div class="search-bar-container">
+            <div class="search-bar-container" id="search-bar-container">
                 <i class="fa-solid fa-magnifying-glass search-input-icon"></i>
                 <input type="text" id="search-input" placeholder="Search songs, artists, albums..." autocomplete="off">
                 <button id="btn-clear-search" class="btn-clear" style="display: none;">
@@ -93,8 +93,11 @@
 
         <!-- Main Workspace -->
         <div class="main-workspace">
-            <!-- Left Side: Main Player Area -->
-            <div class="player-container">
+            <!-- Left Section (Empty/Spacer) -->
+            <div class="left-section"></div>
+
+            <!-- Center Section: Main Player Area -->
+            <div class="center-section player-container">
                 <div class="player-wrapper">
                     <!-- Album Vinyl Frame -->
                     <div class="album-container">
@@ -158,40 +161,59 @@
                             <input type="range" id="volume-slider" min="0" max="100" value="50" step="1">
                         </div>
                         <span id="volume-percentage" class="volume-percentage">50%</span>
-                        <!-- Queue Button next to Volume -->
-                        <button id="btn-toggle-queue" class="btn-icon queue-toggle-btn" title="Open Queue">
+                        <!-- Queue Button (only visible on small screens) -->
+                        <button id="btn-queue-modal" class="btn-icon btn-queue-modal" title="Open Queue">
                             <i class="fa-solid fa-list-ul"></i>
                         </button>
                     </div>
                 </div>
             </div>
 
-        </div>
+            <!-- Right Section: Play Queue (Placed directly inside main-workspace) -->
+            <div class="right-section queue-drawer" id="queue-drawer">
+                <div class="drawer-header">
+                    <span class="drawer-title"><i class="fa-solid fa-list-ul"></i> Play Queue</span>
+                </div>
 
-        <!-- Slide-out Drawer: Play Queue (From Right Side) -->
-        <div class="queue-drawer" id="queue-drawer">
-            <div class="drawer-header">
+                <div class="queue-wrapper">
+                    <div class="queue-section-title">Now Playing</div>
+                    <div class="queue-current-item" id="queue-current-item">
+                        <!-- Populated by JS -->
+                    </div>
+
+                    <div class="queue-section-title" id="queue-user-title" style="display: none;">Next In Queue</div>
+                    <div class="queue-list" id="queue-user-list" style="display: none;">
+                        <!-- Populated by JS -->
+                    </div>
+
+                    <div class="queue-section-title" id="queue-context-title">Next Up</div>
+                    <div class="queue-list" id="queue-context-list">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Queue Modal (Bottom Sheet for small screens) -->
+    <div class="queue-modal-overlay" id="queue-modal-overlay">
+        <div class="queue-modal" id="queue-modal">
+            <div class="queue-modal-handle"></div>
+            <div class="queue-modal-header">
                 <span class="drawer-title"><i class="fa-solid fa-list-ul"></i> Play Queue</span>
-                <button class="btn-icon btn-close-drawer" id="btn-close-queue" title="Close Queue">
+                <button class="btn-icon" id="btn-close-queue-modal" title="Close">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
             </div>
-
-            <div class="queue-wrapper">
+            <div class="queue-modal-body">
                 <div class="queue-section-title">Now Playing</div>
-                <div class="queue-current-item" id="queue-current-item">
-                    <!-- Populated by JS -->
-                </div>
+                <div class="queue-current-item" id="queue-modal-current-item"></div>
 
-                <div class="queue-section-title" id="queue-user-title" style="display: none;">Next In Queue</div>
-                <div class="queue-list" id="queue-user-list" style="display: none;">
-                    <!-- Populated by JS -->
-                </div>
+                <div class="queue-section-title" id="queue-modal-user-title" style="display:none;">Next In Queue</div>
+                <div class="queue-list" id="queue-modal-user-list" style="display:none;"></div>
 
-                <div class="queue-section-title" id="queue-context-title">Next Up</div>
-                <div class="queue-list" id="queue-context-list">
-                    <!-- Populated by JS -->
-                </div>
+                <div class="queue-section-title" id="queue-modal-context-title">Next Up</div>
+                <div class="queue-list" id="queue-modal-context-list"></div>
             </div>
         </div>
     </div>
