@@ -6,12 +6,13 @@ The project runs a small Node.js web server that serves a browser UI and relays 
 
 ## Features
 
-- Remote playback controls: play/pause, previous, next, seek, shuffle, repeat, and volume.
+- Remote playback controls: play/pause, previous, next, seek, shuffle, repeat (playlist, track loop, off), and volume.
 - Live now-playing display with album art and ambient background glow.
 - Search Spotify tracks from the web UI.
 - Play tracks immediately or add them to the queue.
 - Queue view with `Now Playing`, `Next In Queue`, and `Next Up`.
-- Drag-and-drop queue reordering on desktop and touch reordering on mobile.
+- Drag-and-drop queue reordering (for both `Next In Queue` and `Next Up`) on desktop and touch reordering on mobile.
+- Support for removing items and moving context items ("Next Up") directly to the user queue.
 - Mobile queue bottom sheet.
 - Lyrics panel with synced highlighting.
 - Mobile lyrics toggle that swaps the vinyl art for lyrics.
