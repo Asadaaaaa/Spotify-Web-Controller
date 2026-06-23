@@ -336,10 +336,12 @@
                     this.broadcastFullState();
                     break;
                 case 'shuffle':
-                    Spicetify.Player.setShuffle(data);
+                    await Spicetify.Player.setShuffle(data);
+                    setTimeout(() => this.broadcastFullState(), 300);
                     break;
                 case 'repeat':
-                    Spicetify.Player.setRepeat(data);
+                    await Spicetify.Player.setRepeat(data);
+                    setTimeout(() => this.broadcastFullState(), 300);
                     break;
                 case 'toggleHeart':
                     Spicetify.Player.toggleHeart();

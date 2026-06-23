@@ -373,17 +373,17 @@ document.addEventListener('DOMContentLoaded', () => {
             // Repeat context (album/playlist)
             btnRepeat.classList.add('active');
             repeatIcon.className = 'fa-solid fa-repeat';
+            btnRepeat.title = "Repeat: Playlist";
         } else if (playbackState.repeat === 2) {
-            // Repeat track
+            // Repeat track (single)
             btnRepeat.classList.add('active');
             repeatIcon.className = 'fa-solid fa-repeat-1'; // FontAwesome repeat track icon
-            // Fallback if class doesn't render: repeat icon with superscript
-            if (!repeatIcon.offsetHeight) {
-                repeatIcon.className = 'fa-solid fa-repeat';
-            }
+            // If fa-repeat-1 is not rendering or missing, style-based indicator:
+            btnRepeat.title = "Repeat: Track";
         } else {
             // Repeat off
             repeatIcon.className = 'fa-solid fa-repeat';
+            btnRepeat.title = "Repeat: Off";
         }
 
         // 6. Volume Slider
@@ -590,19 +590,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const artUrl = getImageUrl(track.albumArt) || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=50';
 
-            let dragHandleHTML = '';
-            if (isUserQueue) {
-                dragHandleHTML = `
-                    <div class="drag-handle" title="Drag to reorder">
-                        <i class="fa-solid fa-grip-vertical"></i>
-                    </div>
-                `;
-            }
+            const dragHandleHTML = `
+                <div class="drag-handle" title="Drag to reorder">
+                    <i class="fa-solid fa-grip-vertical"></i>
+                </div>
+            `;
 
             let rightPartHTML = '';
             if (isUserQueue) {
                 rightPartHTML = `
                     <div class="track-item-right">
+                        <button class="btn-item-action btn-remove-queue" title="Remove from Queue">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </div>
+                `;
+            } else {
+                rightPartHTML = `
+                    <div class="track-item-right">
+                        <button class="btn-item-action btn-move-queue" title="Move to User Queue">
+                            <i class="fa-solid fa-square-plus"></i>
+                        </button>
                         <button class="btn-item-action btn-remove-queue" title="Remove from Queue">
                             <i class="fa-solid fa-trash-can"></i>
                         </button>
@@ -627,48 +635,70 @@ document.addEventListener('DOMContentLoaded', () => {
             trackItem.dataset.uid = track.uid;
             trackItem.dataset.uri = track.uri;
 
-            if (isUserQueue) {
-                trackItem.setAttribute('draggable', 'true');
+            // Make all queue items draggable (both User Queue and Context Queue)
+            trackItem.setAttribute('draggable', 'true');
 
-                trackItem.addEventListener('dragstart', (e) => {
-                    trackItem.classList.add('dragging');
-                    e.dataTransfer.effectAllowed = 'move';
-                    e.dataTransfer.setData('text/plain', track.uid);
-                });
+            trackItem.addEventListener('dragstart', (e) => {
+                trackItem.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', track.uid);
+            });
 
-                trackItem.addEventListener('dragend', () => {
-                    trackItem.classList.remove('dragging');
+            trackItem.addEventListener('dragend', () => {
+                trackItem.classList.remove('dragging');
 
-                    // Determine the item dropped before
-                    const nextItem = trackItem.nextElementSibling;
-                    let insertBeforeTrack = null;
+                // Determine the item dropped before
+                const nextItem = trackItem.nextElementSibling;
+                let insertBeforeTrack = null;
 
-                    if (nextItem) {
+                if (nextItem) {
+                    insertBeforeTrack = {
+                        uri: nextItem.dataset.uri || "",
+                        uid: nextItem.dataset.uid
+                    };
+                } else {
+                    // Dropped at the end. Target the first context track if available.
+                    const firstContextItem = queueContextList.querySelector('.queue-item');
+                    if (firstContextItem && firstContextItem !== trackItem) {
                         insertBeforeTrack = {
-                            uri: nextItem.dataset.uri || "",
-                            uid: nextItem.dataset.uid
+                            uri: firstContextItem.dataset.uri || "",
+                            uid: firstContextItem.dataset.uid
                         };
-                    } else {
-                        // Dropped at the end of nextInQueue. Target the first context track if available.
-                        const firstContextItem = queueContextList.querySelector('.queue-item');
-                        if (firstContextItem) {
-                            insertBeforeTrack = {
-                                uri: firstContextItem.dataset.uri || "",
-                                uid: firstContextItem.dataset.uid
-                            };
-                        }
                     }
+                }
 
-                    sendCommand('reorder_queue', {
-                        track: { uri: track.uri, uid: track.uid },
-                        insertBefore: insertBeforeTrack
-                    });
+                sendCommand('reorder_queue', {
+                    track: { uri: track.uri, uid: track.uid },
+                    insertBefore: insertBeforeTrack
                 });
+            });
 
-                trackItem.querySelector('.btn-remove-queue').addEventListener('click', () => {
+            // Action Handlers
+            const btnRemove = trackItem.querySelector('.btn-remove-queue');
+            if (btnRemove) {
+                btnRemove.addEventListener('click', () => {
                     sendCommand('remove_queue', { uri: track.uri, uid: track.uid });
                     trackItem.style.opacity = '0.3';
                     trackItem.style.pointerEvents = 'none';
+                });
+            }
+
+            const btnMove = trackItem.querySelector('.btn-move-queue');
+            if (btnMove) {
+                btnMove.addEventListener('click', () => {
+                    sendCommand('add_queue', track.uri);
+                    
+                    // Temporarily change icon to checkmark and fade out the item to show it's moved
+                    const icon = btnMove.querySelector('i');
+                    icon.className = 'fa-solid fa-circle-check';
+                    icon.style.color = '#1ed760';
+                    trackItem.style.opacity = '0.3';
+                    trackItem.style.pointerEvents = 'none';
+
+                    // Delay removing to let Spotify add the track first and avoid "can't play this right now" state conflict
+                    setTimeout(() => {
+                        sendCommand('remove_queue', { uri: track.uri, uid: track.uid });
+                    }, 400);
                 });
             }
 

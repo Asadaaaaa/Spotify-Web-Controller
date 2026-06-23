@@ -525,6 +525,29 @@ body {
     text-shadow: 0 0 10px var(--primary-glow);
 }
 
+/* Badge style for single track repeat indicator */
+#btn-repeat.active i.fa-repeat-1 {
+    position: relative;
+}
+
+#btn-repeat.active i.fa-repeat-1::after {
+    content: '1';
+    position: absolute;
+    top: -5px;
+    right: -7px;
+    font-size: 9px;
+    font-weight: 800;
+    background: var(--primary);
+    color: var(--bg-dark);
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 5px var(--primary-glow);
+}
+
 /* Volume Section & Queue Button */
 .volume-section {
     display: flex;
