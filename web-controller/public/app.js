@@ -1,6 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
     // UI Elements
-    const statusBadge = document.getElementById('status-badge');
     const offlineScreen = document.getElementById('offline-screen');
     const ambientGlow = document.getElementById('ambient-glow');
 
@@ -208,8 +207,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     case 'spotify_online':
                         if (data) {
                             offlineScreen.classList.remove('active');
-                            statusBadge.className = 'connection-status online';
-                            statusBadge.querySelector('.status-text').textContent = 'Spotify Connected';
                         } else {
                             setOfflineState();
                         }
@@ -241,11 +238,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function setOfflineState() {
         offlineScreen.classList.add('active');
-        statusBadge.className = 'connection-status offline';
-        statusBadge.querySelector('.status-text').textContent = 'Spotify Offline';
         stopProgressInterpolation();
         closeMobileLyricsView();
     }
+
+    // --- GitHub Stars Fetch ---
+    async function fetchGitHubStars() {
+        const badgeRight = document.querySelector('#github-stars-badge .github-stars-right span');
+        if (!badgeRight) return;
+        try {
+            const response = await fetch('https://api.github.com/repos/Asadaaaaa/Spotify-Web-Controller');
+            if (response.ok) {
+                const data = await response.json();
+                if (data && typeof data.stargazers_count === 'number') {
+                    // Format with commas, e.g., 193,734
+                    badgeRight.textContent = data.stargazers_count.toLocaleString();
+                }
+            }
+        } catch (error) {
+            console.error('Failed to fetch GitHub stars:', error);
+        }
+    }
+    fetchGitHubStars();
 
     // --- Send Command Helper ---
     function sendCommand(type, data = null) {

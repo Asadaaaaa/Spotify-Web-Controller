@@ -55,7 +55,15 @@ npm install
 
 ## Run The Web Server
 
-Start the local web controller server:
+Run everything from the project root:
+
+```bash
+node index.js
+```
+
+This starts the web server, copies `spicetify-extension/web-controller.js` into the Spicetify `Extensions` directory, runs `spicetify config extensions web-controller.js`, runs `spicetify apply`, and then starts `spicetify auto`.
+
+Or start only the local web controller server:
 
 ```bash
 cd web-controller
