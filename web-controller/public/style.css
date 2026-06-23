@@ -1150,12 +1150,85 @@ body {
     flex-grow: 1;
 }
 
+/* Floating Lyrics Window (Desktop Only) */
+.floating-lyrics-window {
+    position: fixed;
+    z-index: 150;
+    width: 380px;
+    height: 500px;
+    min-width: 280px;
+    min-height: 300px;
+    background: rgba(10, 11, 14, 0.65);
+    backdrop-filter: blur(30px);
+    -webkit-backdrop-filter: blur(30px);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    resize: both;
+}
+
+.floating-lyrics-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 18px;
+    background: rgba(255, 255, 255, 0.03);
+    border-bottom: 1px solid var(--border);
+    cursor: move;
+    user-select: none;
+    flex-shrink: 0;
+}
+
+.floating-lyrics-title {
+    font-size: 14px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-main);
+}
+
+.floating-lyrics-title i {
+    color: var(--primary);
+}
+
+.floating-lyrics-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.floating-lyrics-body {
+    flex-grow: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+    position: relative;
+}
+
+.floating-lyrics-body .lyrics-wrapper {
+    height: 100%;
+}
+
+.floating-lyrics-window .lyrics-line,
+#pip-lyrics-wrapper .lyrics-line {
+    font-size: 21px;
+}
+
 /* ======================================================
    RESPONSIVE DESIGN LAYOUTS
    ====================================================== */
 
 /* Below 1300px: hide sidebar queue, show queue button in volume bar */
 @media (max-width: 1300px) {
+    .floating-lyrics-window {
+        display: none !important;
+    }
+
     .left-section {
         display: none;
     }

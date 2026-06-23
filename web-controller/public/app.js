@@ -69,6 +69,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const mobileLyricsContent = document.getElementById('mobile-lyrics-content');
     const mobileLyricsLines = document.getElementById('mobile-lyrics-lines');
 
+    // Floating Lyrics Elements (Desktop)
+    const btnFloatingLyrics = document.getElementById('btn-floating-lyrics');
+    const btnFloatingClose = document.getElementById('btn-floating-close');
+    const floatingLyricsWindow = document.getElementById('floating-lyrics-window');
+    const floatingLyricsDragHandle = document.getElementById('floating-lyrics-drag-handle');
+    const floatingLyricsPlaceholder = document.getElementById('floating-lyrics-placeholder');
+    const floatingLyricsLoading = document.getElementById('floating-lyrics-loading');
+    const floatingLyricsEmpty = document.getElementById('floating-lyrics-empty');
+    const floatingLyricsContent = document.getElementById('floating-lyrics-content');
+    const floatingLyricsLines = document.getElementById('floating-lyrics-lines');
+
 
 
 
@@ -168,6 +179,321 @@ document.addEventListener('DOMContentLoaded', () => {
             openMobileLyricsView();
         }
     });
+
+    // --- Floating Lyrics Handlers ---
+    let pipWindow = null;
+    let isDraggingWindow = false;
+    let dragStartX = 0;
+    let dragStartY = 0;
+    let windowStartX = 0;
+    let windowStartY = 0;
+
+    if (floatingLyricsDragHandle) {
+        floatingLyricsDragHandle.addEventListener('mousedown', (e) => {
+            if (e.target.closest('.floating-lyrics-controls') || e.target.closest('button')) return;
+            isDraggingWindow = true;
+            dragStartX = e.clientX;
+            dragStartY = e.clientY;
+            windowStartX = floatingLyricsWindow.offsetLeft;
+            windowStartY = floatingLyricsWindow.offsetTop;
+            document.addEventListener('mousemove', onWindowDrag);
+            document.addEventListener('mouseup', onWindowDragEnd);
+            e.preventDefault();
+        });
+    }
+
+    function onWindowDrag(e) {
+        if (!isDraggingWindow) return;
+        const dx = e.clientX - dragStartX;
+        const dy = e.clientY - dragStartY;
+        let newX = windowStartX + dx;
+        let newY = windowStartY + dy;
+        
+        newX = Math.max(0, Math.min(window.innerWidth - floatingLyricsWindow.offsetWidth, newX));
+        newY = Math.max(0, Math.min(window.innerHeight - floatingLyricsWindow.offsetHeight, newY));
+        
+        floatingLyricsWindow.style.left = `${newX}px`;
+        floatingLyricsWindow.style.top = `${newY}px`;
+        floatingLyricsWindow.style.right = 'auto';
+        floatingLyricsWindow.style.bottom = 'auto';
+    }
+
+    function onWindowDragEnd() {
+        if (isDraggingWindow) {
+            isDraggingWindow = false;
+            document.removeEventListener('mousemove', onWindowDrag);
+            document.removeEventListener('mouseup', onWindowDragEnd);
+            saveFloatingLyricsState();
+        }
+    }
+
+    const resizeObserver = new ResizeObserver(() => {
+        saveFloatingLyricsState();
+    });
+
+    function saveFloatingLyricsState() {
+        if (floatingLyricsWindow && floatingLyricsWindow.style.display !== 'none') {
+            const state = {
+                left: floatingLyricsWindow.style.left,
+                top: floatingLyricsWindow.style.top,
+                width: floatingLyricsWindow.style.width,
+                height: floatingLyricsWindow.style.height
+            };
+            localStorage.setItem('floatingLyricsState', JSON.stringify(state));
+        }
+    }
+
+    function restoreFloatingLyricsState() {
+        if (!floatingLyricsWindow) return;
+        try {
+            const saved = localStorage.getItem('floatingLyricsState');
+            if (saved) {
+                const state = JSON.parse(saved);
+                if (state.left) floatingLyricsWindow.style.left = state.left;
+                if (state.top) floatingLyricsWindow.style.top = state.top;
+                if (state.width) floatingLyricsWindow.style.width = state.width;
+                if (state.height) floatingLyricsWindow.style.height = state.height;
+                floatingLyricsWindow.style.right = 'auto';
+                floatingLyricsWindow.style.bottom = 'auto';
+            } else {
+                floatingLyricsWindow.style.left = `${window.innerWidth - 420}px`;
+                floatingLyricsWindow.style.top = '100px';
+                floatingLyricsWindow.style.width = '380px';
+                floatingLyricsWindow.style.height = '500px';
+            }
+        } catch (e) {
+            console.error('Failed to restore floating lyrics state', e);
+        }
+    }
+
+    async function toggleFloatingLyrics() {
+        if ('documentPictureInPicture' in window) {
+            if (pipWindow) {
+                pipWindow.close();
+                return;
+            }
+
+            try {
+                pipWindow = await window.documentPictureInPicture.requestWindow({
+                    width: 380,
+                    height: 500
+                });
+
+                // Copy Google Font links explicitly to PiP window
+                const fontLinks = document.querySelectorAll('link[href*="fonts.googleapis.com"], link[href*="fonts.gstatic.com"], link[href*="css2"]');
+                fontLinks.forEach(link => {
+                    const clonedLink = pipWindow.document.createElement('link');
+                    clonedLink.rel = link.rel || 'stylesheet';
+                    clonedLink.href = link.href;
+                    if (link.crossOrigin) clonedLink.crossOrigin = link.crossOrigin;
+                    pipWindow.document.head.appendChild(clonedLink);
+                });
+
+                // Copy styles to PiP window
+                [...document.styleSheets].forEach((styleSheet) => {
+                    try {
+                        const cssRules = [...styleSheet.cssRules].map((rule) => rule.cssText).join('');
+                        const style = pipWindow.document.createElement('style');
+                        style.textContent = cssRules;
+                        pipWindow.document.head.appendChild(style);
+                    } catch (e) {
+                        const link = pipWindow.document.createElement('link');
+                        link.rel = 'stylesheet';
+                        link.href = styleSheet.href;
+                        pipWindow.document.head.appendChild(link);
+                    }
+                });
+
+                // Set body style
+                pipWindow.document.body.style.background = '#07080a';
+                pipWindow.document.body.style.margin = '0';
+                pipWindow.document.body.style.padding = '20px';
+                pipWindow.document.body.style.overflow = 'hidden';
+                pipWindow.document.body.style.height = '100vh';
+                pipWindow.document.body.style.display = 'flex';
+                pipWindow.document.body.style.flexDirection = 'column';
+                pipWindow.document.body.style.boxSizing = 'border-box';
+
+                // Add container
+                const wrapper = pipWindow.document.createElement('div');
+                wrapper.className = 'lyrics-wrapper';
+                wrapper.id = 'pip-lyrics-wrapper';
+                wrapper.style.height = '100%';
+                wrapper.style.overflowY = 'auto';
+                wrapper.style.display = 'flex';
+                wrapper.style.flexDirection = 'column';
+
+                wrapper.innerHTML = `
+                    <div class="lyrics-state" id="pip-lyrics-placeholder" style="display: flex;">
+                        <i class="fa-solid fa-music"></i>
+                        <h3>Lyrics will appear here</h3>
+                        <p>Start playing a track to see synced or plain lyrics.</p>
+                    </div>
+                    <div class="lyrics-state" id="pip-lyrics-loading" style="display: none;">
+                        <div class="spinner"></div>
+                        <p>Loading lyrics...</p>
+                    </div>
+                    <div class="lyrics-state" id="pip-lyrics-empty" style="display: none;">
+                        <i class="fa-regular fa-comment-dots"></i>
+                        <h3>No lyrics found</h3>
+                        <p>This track may not be available in the lyrics database.</p>
+                    </div>
+                    <div class="lyrics-content" id="pip-lyrics-content" style="display: none; flex-direction: column; min-height: 100%;">
+                        <div class="lyrics-lines" id="pip-lyrics-lines"></div>
+                    </div>
+                `;
+
+                pipWindow.document.body.appendChild(wrapper);
+
+                if (btnFloatingLyrics) btnFloatingLyrics.classList.add('active');
+
+                // Trigger initial sync
+                updatePipLyricsUI();
+
+                pipWindow.addEventListener('pagehide', () => {
+                    pipWindow = null;
+                    if (btnFloatingLyrics) btnFloatingLyrics.classList.remove('active');
+                });
+
+            } catch (err) {
+                console.error('Failed to open Document Picture-in-Picture window, falling back to in-page popup:', err);
+                toggleInPageFloatingLyrics();
+            }
+        } else {
+            toggleInPageFloatingLyrics();
+        }
+    }
+
+    function toggleInPageFloatingLyrics() {
+        if (!floatingLyricsWindow) return;
+        if (floatingLyricsWindow.style.display === 'none') {
+            restoreFloatingLyricsState();
+            floatingLyricsWindow.style.display = 'flex';
+            if (btnFloatingLyrics) btnFloatingLyrics.classList.add('active');
+            resizeObserver.observe(floatingLyricsWindow);
+            if (lyricsState.lines.length > 0 || lyricsState.rawText) {
+                renderLyricsLines();
+                updateLyricsHighlight(playbackState.progress);
+            }
+        } else {
+            resizeObserver.unobserve(floatingLyricsWindow);
+            floatingLyricsWindow.style.display = 'none';
+            if (btnFloatingLyrics) btnFloatingLyrics.classList.remove('active');
+        }
+    }
+
+    if (btnFloatingLyrics) {
+        btnFloatingLyrics.addEventListener('click', toggleFloatingLyrics);
+    }
+    if (btnFloatingClose) {
+        btnFloatingClose.addEventListener('click', () => {
+            if (floatingLyricsWindow) {
+                resizeObserver.unobserve(floatingLyricsWindow);
+                floatingLyricsWindow.style.display = 'none';
+            }
+            if (btnFloatingLyrics) btnFloatingLyrics.classList.remove('active');
+        });
+    }
+
+    function updatePipLyricsUI() {
+        if (!pipWindow) return;
+        const doc = pipWindow.document;
+        const pipPlaceholder = doc.getElementById('pip-lyrics-placeholder');
+        const pipLoading = doc.getElementById('pip-lyrics-loading');
+        const pipEmpty = doc.getElementById('pip-lyrics-empty');
+        const pipContent = doc.getElementById('pip-lyrics-content');
+        const pipLines = doc.getElementById('pip-lyrics-lines');
+
+        if (!playbackState.track) {
+            if (pipPlaceholder) pipPlaceholder.style.display = 'flex';
+            if (pipLoading) pipLoading.style.display = 'none';
+            if (pipEmpty) pipEmpty.style.display = 'none';
+            if (pipContent) pipContent.style.display = 'none';
+            if (pipLines) pipLines.innerHTML = '';
+            return;
+        }
+
+        if (lyricsState.loading) {
+            if (pipPlaceholder) pipPlaceholder.style.display = 'none';
+            if (pipEmpty) pipEmpty.style.display = 'none';
+            if (pipLoading) pipLoading.style.display = 'flex';
+            if (pipContent) pipContent.style.display = 'none';
+            return;
+        }
+
+        if (lyricsState.lines.length === 0 && !lyricsState.rawText) {
+            if (pipPlaceholder) pipPlaceholder.style.display = 'none';
+            if (pipLoading) pipLoading.style.display = 'none';
+            if (pipContent) pipContent.style.display = 'none';
+            if (pipEmpty) pipEmpty.style.display = 'flex';
+            return;
+        }
+
+        if (pipPlaceholder) pipPlaceholder.style.display = 'none';
+        if (pipLoading) pipLoading.style.display = 'none';
+        if (pipEmpty) pipEmpty.style.display = 'none';
+        if (pipContent) pipContent.style.display = 'flex';
+
+        // Render lines inside PiP
+        if (pipLines) {
+            pipLines.innerHTML = '';
+            if (lyricsState.lines.length === 0) {
+                const emptyLine = doc.createElement('div');
+                emptyLine.className = 'lyrics-line empty';
+                emptyLine.textContent = lyricsState.rawText || 'No lyrics available.';
+                pipLines.appendChild(emptyLine);
+            } else {
+                lyricsState.lines.forEach((line, index) => {
+                    const lineEl = doc.createElement('div');
+                    lineEl.className = 'lyrics-line';
+                    lineEl.dataset.index = String(index);
+                    lineEl.dataset.time = String(typeof line.time === 'number' ? line.time : -1);
+
+                    const textSpan = doc.createElement('span');
+                    textSpan.textContent = line.text || '';
+                    lineEl.appendChild(textSpan);
+
+                    pipLines.appendChild(lineEl);
+                });
+            }
+        }
+
+        // Highlight
+        updatePipLyricsHighlight(playbackState.progress);
+    }
+
+    function updatePipLyricsHighlight(progressMs) {
+        if (!pipWindow) return;
+        const doc = pipWindow.document;
+        const pipLines = doc.getElementById('pip-lyrics-lines');
+        if (!pipLines || lyricsState.lines.length === 0) return;
+
+        let activeIndex = -1;
+        for (let i = 0; i < lyricsState.lines.length; i++) {
+            const lineTime = lyricsState.lines[i].time;
+            if (typeof lineTime !== 'number') continue;
+            if (progressMs >= lineTime) activeIndex = i;
+            if (progressMs < lineTime) break;
+        }
+
+        const lineEls = pipLines.querySelectorAll('.lyrics-line');
+        lineEls.forEach((el, index) => {
+            el.classList.toggle('active', index === activeIndex);
+            el.classList.toggle('upcoming', activeIndex >= 0 ? index > activeIndex : index > 0);
+            el.classList.toggle('past', activeIndex >= 0 ? index < activeIndex : false);
+        });
+
+        const activeEl = pipLines.querySelector('.lyrics-line.active');
+        if (activeEl) {
+            pipWindow.requestAnimationFrame(() => {
+                activeEl.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center',
+                    inline: 'nearest'
+                });
+            });
+        }
+    }
 
     // Close modal when clicking on the overlay backdrop
     queueModalOverlay.addEventListener('click', (e) => {
@@ -466,6 +792,13 @@ document.addEventListener('DOMContentLoaded', () => {
             lyricsEmpty.style.display = 'none';
             lyricsLoading.style.display = lyricsState.loading ? 'flex' : 'none';
             lyricsContent.style.display = lyricsState.lines.length > 0 || lyricsState.rawText ? 'flex' : 'none';
+
+            if (floatingLyricsPlaceholder) {
+                floatingLyricsPlaceholder.style.display = 'none';
+                floatingLyricsEmpty.style.display = 'none';
+                floatingLyricsLoading.style.display = lyricsState.loading ? 'flex' : 'none';
+                floatingLyricsContent.style.display = lyricsState.lines.length > 0 || lyricsState.rawText ? 'flex' : 'none';
+            }
         } else {
             showLyricsPlaceholder();
         }
@@ -508,6 +841,16 @@ document.addEventListener('DOMContentLoaded', () => {
         mobileLyricsEmpty.style.display = 'none';
         mobileLyricsContent.style.display = 'none';
         mobileLyricsLines.innerHTML = '';
+
+        if (floatingLyricsPlaceholder) {
+            floatingLyricsPlaceholder.style.display = 'flex';
+            floatingLyricsLoading.style.display = 'none';
+            floatingLyricsEmpty.style.display = 'none';
+            floatingLyricsContent.style.display = 'none';
+            floatingLyricsLines.innerHTML = '';
+        }
+
+        updatePipLyricsUI();
     }
 
     function getCurrentTrackKey() {
@@ -546,6 +889,12 @@ document.addEventListener('DOMContentLoaded', () => {
             mobileLyricsEmpty.style.display = 'none';
             mobileLyricsLoading.style.display = 'flex';
             mobileLyricsContent.style.display = 'none';
+            if (floatingLyricsPlaceholder) {
+                floatingLyricsPlaceholder.style.display = 'none';
+                floatingLyricsEmpty.style.display = 'none';
+                floatingLyricsLoading.style.display = 'flex';
+                floatingLyricsContent.style.display = 'none';
+            }
             return;
         }
 
@@ -558,6 +907,12 @@ document.addEventListener('DOMContentLoaded', () => {
             mobileLyricsLoading.style.display = 'none';
             mobileLyricsContent.style.display = 'none';
             mobileLyricsEmpty.style.display = 'flex';
+            if (floatingLyricsPlaceholder) {
+                floatingLyricsPlaceholder.style.display = 'none';
+                floatingLyricsLoading.style.display = 'none';
+                floatingLyricsContent.style.display = 'none';
+                floatingLyricsEmpty.style.display = 'flex';
+            }
             return;
         }
 
@@ -569,14 +924,22 @@ document.addEventListener('DOMContentLoaded', () => {
         mobileLyricsLoading.style.display = 'none';
         mobileLyricsEmpty.style.display = 'none';
         mobileLyricsContent.style.display = 'flex';
+        if (floatingLyricsPlaceholder) {
+            floatingLyricsPlaceholder.style.display = 'none';
+            floatingLyricsLoading.style.display = 'none';
+            floatingLyricsEmpty.style.display = 'none';
+            floatingLyricsContent.style.display = 'flex';
+        }
 
         renderLyricsLines();
         updateLyricsHighlight(playbackState.progress);
+        updatePipLyricsUI();
     }
 
     function renderLyricsLines() {
         lyricsLines.innerHTML = '';
         mobileLyricsLines.innerHTML = '';
+        if (floatingLyricsLines) floatingLyricsLines.innerHTML = '';
 
         if (lyricsState.lines.length === 0) {
             const emptyLine = document.createElement('div');
@@ -584,6 +947,7 @@ document.addEventListener('DOMContentLoaded', () => {
             emptyLine.textContent = lyricsState.rawText || 'No lyrics available.';
             lyricsLines.appendChild(emptyLine);
             mobileLyricsLines.appendChild(emptyLine.cloneNode(true));
+            if (floatingLyricsLines) floatingLyricsLines.appendChild(emptyLine.cloneNode(true));
             return;
         }
 
@@ -599,7 +963,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             lyricsLines.appendChild(lineEl);
             mobileLyricsLines.appendChild(lineEl.cloneNode(true));
+            if (floatingLyricsLines) floatingLyricsLines.appendChild(lineEl.cloneNode(true));
         });
+
+        updatePipLyricsUI();
     }
 
     function updateLyricsHighlight(progressMs) {
@@ -618,6 +985,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const lineEls = lyricsLines.querySelectorAll('.lyrics-line');
         const mobileLineEls = mobileLyricsLines.querySelectorAll('.lyrics-line');
+        
         lineEls.forEach((el, index) => {
             el.classList.toggle('active', index === activeIndex);
             el.classList.toggle('upcoming', activeIndex >= 0 ? index > activeIndex : index > 0);
@@ -628,6 +996,15 @@ document.addEventListener('DOMContentLoaded', () => {
             el.classList.toggle('upcoming', activeIndex >= 0 ? index > activeIndex : index > 0);
             el.classList.toggle('past', activeIndex >= 0 ? index < activeIndex : false);
         });
+
+        if (floatingLyricsLines) {
+            const floatingLineEls = floatingLyricsLines.querySelectorAll('.lyrics-line');
+            floatingLineEls.forEach((el, index) => {
+                el.classList.toggle('active', index === activeIndex);
+                el.classList.toggle('upcoming', activeIndex >= 0 ? index > activeIndex : index > 0);
+                el.classList.toggle('past', activeIndex >= 0 ? index < activeIndex : false);
+            });
+        }
 
         const activeEl = lyricsLines.querySelector('.lyrics-line.active');
         if (activeEl) {
@@ -650,6 +1027,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             });
         }
+
+        if (floatingLyricsLines) {
+            const floatingActiveEl = floatingLyricsLines.querySelector('.lyrics-line.active');
+            if (floatingActiveEl) {
+                requestAnimationFrame(() => {
+                    floatingActiveEl.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'center',
+                        inline: 'nearest'
+                    });
+                });
+            }
+        }
+
+        updatePipLyricsHighlight(progressMs);
     }
 
     // --- Smooth Progress Bar Interpolation ---

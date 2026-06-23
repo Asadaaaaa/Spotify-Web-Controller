@@ -103,6 +103,9 @@
             <div class="left-section lyrics-drawer">
                 <div class="drawer-header">
                     <span class="drawer-title"><i class="fa-solid fa-microphone-lines"></i> Lyrics</span>
+                    <button id="btn-floating-lyrics" class="btn-icon" title="Floating Lyrics">
+                        <i class="fa-solid fa-up-right-from-square"></i>
+                    </button>
                 </div>
 
                 <div class="lyrics-wrapper" id="lyrics-wrapper">
@@ -273,6 +276,42 @@
 
                 <div class="queue-section-title" id="queue-modal-context-title">Next Up</div>
                 <div class="queue-list" id="queue-modal-context-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Lyrics Window (Desktop Only) -->
+    <div id="floating-lyrics-window" class="floating-lyrics-window" style="display: none;">
+        <div class="floating-lyrics-header" id="floating-lyrics-drag-handle">
+            <span class="floating-lyrics-title"><i class="fa-solid fa-microphone-lines"></i> Floating Lyrics</span>
+            <div class="floating-lyrics-controls">
+                <button id="btn-floating-close" class="btn-icon" title="Close">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+        </div>
+        <div class="floating-lyrics-body">
+            <div class="lyrics-wrapper" id="floating-lyrics-wrapper">
+                <div class="lyrics-state" id="floating-lyrics-placeholder">
+                    <i class="fa-solid fa-music"></i>
+                    <h3>Lyrics will appear here</h3>
+                    <p>Start playing a track to see synced or plain lyrics.</p>
+                </div>
+
+                <div class="lyrics-state" id="floating-lyrics-loading" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>Loading lyrics...</p>
+                </div>
+
+                <div class="lyrics-state" id="floating-lyrics-empty" style="display: none;">
+                    <i class="fa-regular fa-comment-dots"></i>
+                    <h3>No lyrics found</h3>
+                    <p>This track may not be available in the lyrics database.</p>
+                </div>
+
+                <div class="lyrics-content" id="floating-lyrics-content" style="display: none;">
+                    <div class="lyrics-lines" id="floating-lyrics-lines"></div>
+                </div>
             </div>
         </div>
     </div>
