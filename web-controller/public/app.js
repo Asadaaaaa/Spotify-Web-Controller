@@ -1346,13 +1346,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }, { passive: false });
             }
 
-            trackItem.addEventListener('touchstart', (e) => {
-                if (e.touches.length !== 1) return;
-                if (e.target.closest('button')) return;
-                beginTouchQueueDrag(trackItem, e.touches[0]);
-                e.preventDefault();
-            }, { passive: false });
-
             // Action Handlers
             const btnRemove = trackItem.querySelector('.btn-remove-queue');
             if (btnRemove) {

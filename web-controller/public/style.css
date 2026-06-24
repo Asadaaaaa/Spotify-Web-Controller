@@ -1278,10 +1278,6 @@ body {
         width: 100%;
     }
 
-    .queue-item {
-        touch-action: none;
-    }
-
     .drag-handle {
         touch-action: none;
     }
