@@ -248,14 +248,14 @@
         /**
          * Send structured message to the WebSocket server
          */
-        send(type, data) {
+        send(type, data, clientId = null) {
             if (this.ws && this.ws.readyState === WebSocket.OPEN) {
                 try {
-                    this.ws.send(JSON.stringify({ type, data }));
+                    this.ws.send(JSON.stringify({ type, data, clientId }));
                 } catch (err) {
                     console.error("Spotify Web Controller Extension: Failed to send WS message:", err);
                     try {
-                        this.ws.send(JSON.stringify({ type, error: err.message }));
+                        this.ws.send(JSON.stringify({ type, error: err.message, clientId }));
                     } catch (e) {}
                 }
             }
@@ -468,8 +468,8 @@
         /**
          * Route incoming command messages to player APIs
          */
-        async handleIncomingCommand({ type, data }) {
-            console.log("Spotify Web Controller Extension: Received command", type, data);
+        async handleIncomingCommand({ type, data, clientId }) {
+            console.log("Spotify Web Controller Extension: Received command", type, data, "from client", clientId);
 
             switch (type) {
                 case 'play':
@@ -532,7 +532,7 @@
                         }
                         try {
                             if (Spicetify.Platform?.PlayerAPI?.reorderQueue) {
-                                await Spicetify.Platform.PlayerAPI.reorderQueue([trackToMove], target);
+                                  await Spicetify.Platform.PlayerAPI.reorderQueue([trackToMove], target);
                             } else {
                                 console.error("Spicetify Platform PlayerAPI reorderQueue is not available");
                             }
@@ -543,7 +543,7 @@
                     setTimeout(() => this.broadcastQueue(), 300);
                     break;
                 case 'search':
-                    this.searchSpotify(data);
+                    this.searchSpotify(data, clientId);
                     break;
                 case 'request_state':
                     this.broadcastFullState();
@@ -625,9 +625,9 @@
         /**
          * Execute track searches on Spotify
          */
-        async searchSpotify(query) {
+        async searchSpotify(query, clientId) {
             if (!query || query.trim() === '') {
-                this.send('search_results', { query: '', tracks: [] });
+                this.send('search_results', { query: '', tracks: [] }, clientId);
                 return;
             }
 
@@ -636,7 +636,7 @@
             // Return cached result if still fresh
             const cached = this.searchCache.get(trimmed);
             if (cached && (Date.now() - cached.ts < this.CACHE_TTL)) {
-                this.send('search_results', { query: trimmed, tracks: cached.tracks });
+                this.send('search_results', { query: trimmed, tracks: cached.tracks }, clientId);
                 return;
             }
 
@@ -645,7 +645,7 @@
                 if (this.searchCache.size > 50) {
                     this.searchCache.delete(this.searchCache.keys().next().value);
                 }
-                this.send('search_results', { query: trimmed, tracks });
+                this.send('search_results', { query: trimmed, tracks }, clientId);
             };
 
             // Try searchSuggestions first
@@ -657,14 +657,14 @@
                 );
                 if (json?.data) {
                     const tracks = this.parseTracksFromResponse(json.data);
-                    this.send('debug', { msg: 'searchSuggestions', tracks: tracks.length });
+                    this.send('debug', { msg: 'searchSuggestions', tracks: tracks.length }, clientId);
                     if (tracks.length > 0) {
                         cacheAndSend(tracks);
                         return;
                     }
                 }
             } catch (e) {
-                this.send('debug', { msg: 'searchSuggestions error', error: e.message });
+                this.send('debug', { msg: 'searchSuggestions error', error: e.message }, clientId);
             }
 
             // Try searchModalResults fallback
@@ -676,18 +676,18 @@
                 );
                 if (json?.data) {
                     const tracks = this.parseTracksFromResponse(json.data);
-                    this.send('debug', { msg: 'searchModalResults', tracks: tracks.length });
+                    this.send('debug', { msg: 'searchModalResults', tracks: tracks.length }, clientId);
                     if (tracks.length > 0) {
                         cacheAndSend(tracks);
                         return;
                     }
                 }
             } catch (e) {
-                this.send('debug', { msg: 'searchModalResults error', error: e.message });
+                this.send('debug', { msg: 'searchModalResults error', error: e.message }, clientId);
             }
 
-            this.send('debug', { msg: 'all failed', hasToken: !!this.capturedAccessToken, hasClientToken: !!this.capturedClientToken });
-            this.send('search_results', { query: trimmed, tracks: [] });
+            this.send('debug', { msg: 'all failed', hasToken: !!this.capturedAccessToken, hasClientToken: !!this.capturedClientToken }, clientId);
+            this.send('search_results', { query: trimmed, tracks: [] }, clientId);
         }
 
         /**

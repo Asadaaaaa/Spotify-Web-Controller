@@ -4,7 +4,7 @@ const path = require('path');
 
 const rootDir = __dirname;
 const serverPath = path.join(rootDir, 'web-controller', 'server.js');
-const extensionSourcePath = path.join(rootDir, 'spicetify-extension', 'web-controller.js');
+const extensionSourcePath = path.join(rootDir, 'Extensions', 'web-controller.js');
 const extensionFileName = 'web-controller.js';
 
 function run(command, args, options = {}) {
@@ -30,10 +30,14 @@ function installExtension() {
     const extensionsDir = path.join(configDir, 'Extensions');
     const extensionTargetPath = path.join(extensionsDir, extensionFileName);
 
-    fs.mkdirSync(extensionsDir, { recursive: true });
-    fs.copyFileSync(extensionSourcePath, extensionTargetPath);
-
-    console.log(`Copied extension to: ${extensionTargetPath}`);
+    // Only copy if the source and target are not the exact same file path
+    if (path.resolve(extensionSourcePath) !== path.resolve(extensionTargetPath)) {
+        fs.mkdirSync(extensionsDir, { recursive: true });
+        fs.copyFileSync(extensionSourcePath, extensionTargetPath);
+        console.log(`Copied extension to: ${extensionTargetPath}`);
+    } else {
+        console.log(`Extension is already in the target directory: ${extensionTargetPath}`);
+    }
 }
 
 function startWebControllerServer() {
@@ -64,7 +68,9 @@ function stopProcess(child) {
     }
 }
 
-function main() {
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function main() {
     let serverProcess = null;
     let autoProcess = null;
 
@@ -81,6 +87,9 @@ function main() {
         installExtension();
         run('spicetify', ['config', 'extensions', extensionFileName]);
         run('spicetify', ['apply']);
+
+        console.log('Waiting 2 seconds...');
+        await sleep(2000);
 
         console.log('Starting spicetify auto...');
         autoProcess = spawn('spicetify', ['auto'], {

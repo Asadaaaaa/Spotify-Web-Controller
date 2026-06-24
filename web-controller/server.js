@@ -346,6 +346,12 @@ class SpotifyWebControllerServer {
                     return;
                 }
 
+                // If message has a clientId, send it only to that client
+                if (parsed.clientId) {
+                    this.sendToClient(parsed.clientId, parsed);
+                    return;
+                }
+
                 // Relay everything from Spotify to all Web Clients
                 this.broadcastToClients(parsed);
 
@@ -373,6 +379,7 @@ class SpotifyWebControllerServer {
      */
     handleClientConnection(ws) {
         console.log('Web Client connected!');
+        ws.clientId = crypto.randomUUID();
         this.clientSockets.add(ws);
 
         // Send current online status of Spotify to the client
@@ -386,12 +393,15 @@ class SpotifyWebControllerServer {
         ws.on('message', (message) => {
             try {
                 const parsed = JSON.parse(message);
+                // Attach client ID to request so we can route back to this specific client
+                parsed.clientId = ws.clientId;
+
                 // Relay commands from Web Client to Spotify
                 if (this.spotifySocket && this.spotifySocket.readyState === WebSocket.OPEN) {
                     this.spotifySocket.send(JSON.stringify(parsed));
                 } else {
                     console.log('Command ignored: Spotify is not connected.');
-                    ws.send(JSON.stringify({ type: 'error', data: 'Spotify is not connected.' }));
+                    ws.send(JSON.stringify({ type: 'error', data: 'Spotify is not connected.', clientId: ws.clientId }));
                 }
             } catch (err) {
                 console.error('Error parsing message from Client:', err);
@@ -407,6 +417,19 @@ class SpotifyWebControllerServer {
             console.error('Client socket error:', err);
             this.clientSockets.delete(ws);
         });
+    }
+
+    /**
+     * Send WebSocket event to a specific client by ID
+     */
+    sendToClient(clientId, messageObj) {
+        const payload = JSON.stringify(messageObj);
+        for (const client of this.clientSockets) {
+            if (client.clientId === clientId && client.readyState === WebSocket.OPEN) {
+                client.send(payload);
+                break;
+            }
+        }
     }
 
     /**
