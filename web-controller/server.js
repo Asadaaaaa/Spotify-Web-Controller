@@ -6,6 +6,13 @@ const path = require('path');
 const os = require('os');
 const fs = require('fs');
 const crypto = require('crypto');
+const Haikunator = require('haikunator');
+
+const haikunator = new Haikunator({
+    defaults: {
+        tokenLength: 4
+    }
+});
 
 class SpotifyWebControllerServer {
     constructor(port = 8080) {
@@ -38,8 +45,31 @@ class SpotifyWebControllerServer {
         this.lyricsRefreshInFlight = new Set();
         this.LYRICS_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
+        this.deviceNamesPath = path.join(this.cacheDir, 'device-names.json');
+        this.deviceNames = this.loadDeviceNames();
+
         this.initMiddleware();
         this.initWebSocket();
+    }
+
+    loadDeviceNames() {
+        try {
+            if (fs.existsSync(this.deviceNamesPath)) {
+                return JSON.parse(fs.readFileSync(this.deviceNamesPath, 'utf8'));
+            }
+        } catch (e) {
+            console.error('Failed to load device names:', e);
+        }
+        return {};
+    }
+
+    saveDeviceNames() {
+        try {
+            fs.mkdirSync(this.cacheDir, { recursive: true });
+            fs.writeFileSync(this.deviceNamesPath, JSON.stringify(this.deviceNames, null, 2));
+        } catch (e) {
+            console.error('Failed to save device names:', e);
+        }
     }
 
     /**
@@ -320,7 +350,7 @@ class SpotifyWebControllerServer {
             if (type === 'spotify') {
                 this.handleSpotifyConnection(ws);
             } else if (type === 'client') {
-                this.handleClientConnection(ws);
+                this.handleClientConnection(ws, request);
             }
         });
     }
@@ -338,6 +368,7 @@ class SpotifyWebControllerServer {
         ws.on('message', (message) => {
             try {
                 const parsed = JSON.parse(message);
+                console.log(`[Spotify -> Server] type: ${parsed.type}, clientId: ${parsed.clientId || 'none'}`);
                 if (parsed.type === 'lyrics') {
                     if (parsed.data && !parsed.data.loading) {
                         const changed = this.cacheLyricsPayload(parsed.data);
@@ -350,6 +381,28 @@ class SpotifyWebControllerServer {
                 if (parsed.clientId) {
                     this.sendToClient(parsed.clientId, parsed);
                     return;
+                }
+
+                // Enrich track information with requestedBy before broadcasting
+                if (parsed.type === 'state' && parsed.data?.track) {
+                    const uri = parsed.data.track.uri;
+                    if (this.trackRequesters && this.trackRequesters[uri]) {
+                        parsed.data.track.requestedBy = this.trackRequesters[uri];
+                    }
+                } else if (parsed.type === 'queue' && parsed.data) {
+                    if (!this.trackRequesters) this.trackRequesters = {};
+                    if (parsed.data.current && this.trackRequesters[parsed.data.current.uri]) {
+                        parsed.data.current.requestedBy = this.trackRequesters[parsed.data.current.uri];
+                    }
+                    ['next', 'nextInQueue', 'nextUp', 'prev'].forEach(key => {
+                        if (Array.isArray(parsed.data[key])) {
+                            parsed.data[key].forEach(track => {
+                                if (track && this.trackRequesters[track.uri]) {
+                                    track.requestedBy = this.trackRequesters[track.uri];
+                                }
+                            });
+                        }
+                    });
                 }
 
                 // Relay everything from Spotify to all Web Clients
@@ -374,27 +427,130 @@ class SpotifyWebControllerServer {
         });
     }
 
-    /**
-     * Manage Client browser socket connections and command relays
-     */
-    handleClientConnection(ws) {
+    handleClientConnection(ws, request) {
         console.log('Web Client connected!');
         ws.clientId = crypto.randomUUID();
+        
+        // Extract persistent deviceId from request query parameters
+        let deviceId = 'unknown';
+        try {
+            const urlObj = new URL(request.url, `http://${request.headers.host || 'localhost'}`);
+            deviceId = urlObj.searchParams.get('deviceId') || crypto.randomUUID();
+        } catch (e) {
+            console.error('Failed to parse connection URL query params:', e);
+            deviceId = crypto.randomUUID();
+        }
+        ws.deviceId = deviceId;
+
+        // Resolve or generate a readable random name using Haikunator
+        if (!this.deviceNames[deviceId]) {
+            this.deviceNames[deviceId] = haikunator.haikunate();
+            this.saveDeviceNames();
+        }
+        ws.clientName = this.deviceNames[deviceId];
+        
+        // Parse User-Agent to extract device type and OS
+        const ua = (request && request.headers && request.headers['user-agent']) || '';
+        
+        // Detect Device Type
+        let device = 'Web Browser';
+        if (/tablet|ipad|playbook|silk/i.test(ua)) {
+            device = 'Tablet';
+        } else if (/Mobile|Android|iP(hone|od)|IEMobile|BlackBerry|Kindle/i.test(ua)) {
+            device = 'Mobile';
+        } else {
+            device = 'Desktop';
+        }
+        
+        // Detect OS
+        let os = '';
+        if (ua.indexOf('Win') !== -1) os = 'Windows';
+        else if (ua.indexOf('Mac') !== -1) os = 'macOS';
+        else if (/Android/i.test(ua)) os = 'Android';
+        else if (ua.indexOf('X11') !== -1 || ua.indexOf('Linux') !== -1) os = 'Linux';
+        else if (/iPhone|iPad|iPod/i.test(ua)) os = 'iOS';
+        
+        ws.clientDevice = os ? `${device} (${os})` : device;
+        
         this.clientSockets.add(ws);
 
         // Send current online status of Spotify to the client
         ws.send(JSON.stringify({ type: 'spotify_online', data: this.spotifySocket !== null }));
+
+        // Notify client of their registration details
+        ws.send(JSON.stringify({
+            type: 'client_registered',
+            data: {
+                clientId: ws.clientId,
+                name: ws.clientName,
+                device: ws.clientDevice
+            }
+        }));
 
         // Request full state from Spotify if it's connected, so new client gets immediate update
         if (this.spotifySocket && this.spotifySocket.readyState === WebSocket.OPEN) {
             this.spotifySocket.send(JSON.stringify({ type: 'request_state' }));
         }
 
+        // Broadcast initial client list including this new client
+        this.broadcastClientList();
+
         ws.on('message', (message) => {
             try {
                 const parsed = JSON.parse(message);
+
+                // Handle client registration / profile update (fallback)
+                if (parsed.type === 'register_client') {
+                    if (parsed.data) {
+                        if (parsed.data.device) ws.clientDevice = parsed.data.device;
+                        
+                        this.broadcastClientList();
+                    }
+                    return;
+                }
+
+                // Handle request for device action history
+                if (parsed.type === 'get_history') {
+                    const targetId = parsed.data && parsed.data.targetDeviceId;
+                    const historyFile = path.join(this.cacheDir, 'action-history.json');
+                    let history = [];
+                    if (fs.existsSync(historyFile)) {
+                        try {
+                            const allHistory = JSON.parse(fs.readFileSync(historyFile, 'utf8'));
+                            // Filter history by targetId, limit to last 50 actions for UI
+                            history = allHistory
+                                .filter(entry => entry.deviceId === targetId)
+                                .slice(-50)
+                                .reverse();
+                        } catch (e) {
+                            history = [];
+                        }
+                    }
+                    ws.send(JSON.stringify({
+                        type: 'device_history',
+                        data: {
+                            deviceId: targetId,
+                            history: history
+                        }
+                    }));
+                    return;
+                }
+
                 // Attach client ID to request so we can route back to this specific client
                 parsed.clientId = ws.clientId;
+                console.log(`[Client -> Server] type: ${parsed.type}, clientId: ${parsed.clientId}`);
+
+                // Track who requested which song
+                if (parsed.type === 'add_queue' && typeof parsed.data === 'string') {
+                    if (!this.trackRequesters) this.trackRequesters = {};
+                    // Extract URI and store requester name
+                    this.trackRequesters[parsed.data] = ws.clientName;
+                }
+
+                // Log actions of interest (skip, queue, drag/reorder)
+                if (['add_queue', 'reorder_queue', 'next', 'back'].includes(parsed.type)) {
+                    this.logAction(ws.deviceId || 'unknown', ws.clientName || 'unknown', parsed.type, parsed.data);
+                }
 
                 // Relay commands from Web Client to Spotify
                 if (this.spotifySocket && this.spotifySocket.readyState === WebSocket.OPEN) {
@@ -411,11 +567,75 @@ class SpotifyWebControllerServer {
         ws.on('close', () => {
             console.log('Web Client disconnected.');
             this.clientSockets.delete(ws);
+            this.broadcastClientList();
         });
 
         ws.on('error', (err) => {
             console.error('Client socket error:', err);
             this.clientSockets.delete(ws);
+            this.broadcastClientList();
+        });
+    }
+
+    /**
+     * Persist client action history to local storage
+     */
+    logAction(deviceId, clientName, action, data) {
+        try {
+            const historyFile = path.join(this.cacheDir, 'action-history.json');
+            let history = [];
+            if (fs.existsSync(historyFile)) {
+                try {
+                    history = JSON.parse(fs.readFileSync(historyFile, 'utf8'));
+                } catch (e) {
+                    history = [];
+                }
+            }
+
+            const logEntry = {
+                timestamp: new Date().toISOString(),
+                deviceId,
+                clientName,
+                action,
+                details: data || null
+            };
+
+            history.push(logEntry);
+
+            // Filter history to keep only entries from the last 3 days
+            const threeDaysAgo = Date.now() - (3 * 24 * 60 * 60 * 1000);
+            history = history.filter(entry => {
+                if (!entry.timestamp) return false;
+                const entryTime = new Date(entry.timestamp).getTime();
+                return entryTime >= threeDaysAgo;
+            });
+
+            // Cap the logs size to 1000 items as a secondary safety check
+            if (history.length > 1000) {
+                history = history.slice(-1000);
+            }
+
+            fs.mkdirSync(this.cacheDir, { recursive: true });
+            fs.writeFileSync(historyFile, JSON.stringify(history, null, 2));
+            console.log(`[History Log] Device: ${deviceId} (${clientName}) -> Action: ${action}`);
+        } catch (err) {
+            console.error('Failed to log action:', err);
+        }
+    }
+
+    /**
+     * Broadcast list of all active connected clients
+     */
+    broadcastClientList() {
+        const list = Array.from(this.clientSockets).map(client => ({
+            clientId: client.clientId,
+            name: client.clientName,
+            device: client.clientDevice,
+            deviceId: client.deviceId
+        }));
+        this.broadcastToClients({
+            type: 'client_list',
+            data: list
         });
     }
 

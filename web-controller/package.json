@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "express": "^4.19.2",
+    "haikunator": "^2.1.2",
     "ws": "^8.17.0"
   },
   "author": "Antigravity",

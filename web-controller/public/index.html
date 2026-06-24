@@ -85,16 +85,63 @@
                 </div>
             </div>
 
-            <a href="https://github.com/Asadaaaaa/Spotify-Web-Controller" target="_blank" rel="noopener noreferrer"
-                class="github-stars-badge" id="github-stars-badge">
-                <span class="github-stars-left">
-                    <i class="fa-brands fa-github"></i>
-                    <span>Star</span>
-                </span>
-                <span class="github-stars-right">
-                    <span>0</span>
-                </span>
-            </a>
+            <div class="header-right-actions" style="display: flex; align-items: center; gap: 12px;">
+                <div class="clients-floating-container">
+                    <button id="btn-clients-toggle" class="btn-header-action" title="Connected Users">
+                        <i class="fa-solid fa-users"></i>
+                        <span class="badge" id="clients-count" style="display: none;">0</span>
+                    </button>
+                    
+                    <div class="clients-popover" id="clients-popover">
+                        <!-- View 1: Device List -->
+                        <div id="clients-view-list" class="popover-view active">
+                            <div class="clients-header">
+                                <h3><i class="fa-solid fa-network-wired"></i> Connected Devices</h3>
+                            </div>
+                            <div class="clients-list" id="clients-list-container">
+                                <!-- Clients populated here dynamically -->
+                            </div>
+                        </div>
+                        
+                        <!-- View 2: Device Details & History -->
+                        <div id="clients-view-details" class="popover-view">
+                            <div class="clients-header">
+                                <button id="btn-details-back" class="btn-icon-back" title="Back to list">
+                                    <i class="fa-solid fa-chevron-left"></i>
+                                </button>
+                                <h3 id="details-device-name">Device Name</h3>
+                            </div>
+                            <div class="details-body">
+                                <div class="details-meta">
+                                    <div class="details-meta-item">
+                                        <span class="label">Device Info</span>
+                                        <span id="details-meta-device" class="val">Desktop (macOS)</span>
+                                    </div>
+                                    <div class="details-meta-item">
+                                        <span class="label">ID (Alias)</span>
+                                        <span id="details-meta-id" class="val code-highlight">dev-xxx</span>
+                                    </div>
+                                </div>
+                                <div class="details-history-title"><i class="fa-solid fa-clock-rotate-left"></i> Recent Activity</div>
+                                <div class="details-history-list" id="details-history-container">
+                                    <!-- History logs populated here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <a href="https://github.com/Asadaaaaa/Spotify-Web-Controller" target="_blank" rel="noopener noreferrer"
+                    class="github-stars-badge" id="github-stars-badge">
+                    <span class="github-stars-left">
+                        <i class="fa-brands fa-github"></i>
+                        <span>Star</span>
+                    </span>
+                    <span class="github-stars-right">
+                        <span>0</span>
+                    </span>
+                </a>
+            </div>
         </header>
 
         <!-- Main Workspace -->
@@ -173,6 +220,7 @@
                         <div class="track-info-text">
                             <h1 id="track-title">Not Playing</h1>
                             <h2 id="track-artist">Connect your Spotify client</h2>
+                            <div id="track-request-by" class="track-request-by" style="font-size: 11px; font-weight: 600; color: var(--primary); margin-top: 4px; display: none;"></div>
                         </div>
                         <button id="btn-lyrics-mobile" class="btn-icon btn-lyrics-mobile" title="Show Lyrics">
                             <i class="fa-solid fa-microphone-lines"></i>
@@ -303,6 +351,8 @@
             </div>
         </div>
     </div>
+
+
 
     <script src="app.js"></script>
 </body>

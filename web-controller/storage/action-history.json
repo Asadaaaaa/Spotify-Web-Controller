@@ -1,0 +1,23 @@
+[
+  {
+    "timestamp": "2026-06-24T10:38:45.027Z",
+    "deviceId": "dev-85url1v2cxx-fsj2h1j71tp",
+    "clientName": "yellow-dawn-5823",
+    "action": "next",
+    "details": null
+  },
+  {
+    "timestamp": "2026-06-24T10:39:01.710Z",
+    "deviceId": "dev-85url1v2cxx-fsj2h1j71tp",
+    "clientName": "yellow-dawn-5823",
+    "action": "add_queue",
+    "details": "spotify:track:1t0HDXFC1yeCKKxWfbZ5Go"
+  },
+  {
+    "timestamp": "2026-06-24T10:39:04.277Z",
+    "deviceId": "dev-85url1v2cxx-fsj2h1j71tp",
+    "clientName": "yellow-dawn-5823",
+    "action": "next",
+    "details": null
+  }
+]

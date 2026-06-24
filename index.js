@@ -17,8 +17,16 @@ function run(command, args, options = {}) {
 }
 
 function resolveSpicetifyConfigDir() {
-    const output = run('spicetify', ['config-dir'], { capture: true });
-    return output.trim();
+    try {
+        const output = run('spicetify', ['-c'], { capture: true });
+        if (output && output.trim()) {
+            return path.dirname(output.trim());
+        }
+    } catch (err) {
+        console.error('Error resolving spicetify config path:', err);
+    }
+    // Fallback to default macOS config path
+    return path.join(process.env.HOME || '', '.config', 'spicetify');
 }
 
 function installExtension() {

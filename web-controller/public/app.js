@@ -77,8 +77,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // Floating Lyrics Button
     const btnFloatingLyrics = document.getElementById('btn-floating-lyrics');
 
-
-
+    // Connected Clients Elements
+    const btnClientsToggle = document.getElementById('btn-clients-toggle');
+    const clientsPopover = document.getElementById('clients-popover');
+    const clientsCount = document.getElementById('clients-count');
+    const inputMyName = document.getElementById('input-my-name');
+    const btnSaveMyName = document.getElementById('btn-save-my-name');
+    const clientsListContainer = document.getElementById('clients-list-container');
 
     // Search Results Overlay
     const searchResultsOverlay = document.getElementById('search-results-overlay');
@@ -86,6 +91,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Application State
     let socket = null;
     let isConnected = false;
+    let myClientId = null;
+    let myClientName = '';
     let playbackState = {
         track: null,
         progress: 0,
@@ -437,7 +444,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- WebSocket Connection ---
     function connectWS() {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}/client`;
+        const wsUrl = `${protocol}//${window.location.host}/client?deviceId=${getDeviceId()}`;
 
         console.log(`Connecting to WebSocket at ${wsUrl}`);
         socket = new WebSocket(wsUrl);
@@ -470,6 +477,23 @@ document.addEventListener('DOMContentLoaded', () => {
                         } else {
                             setOfflineState();
                         }
+                        break;
+                    case 'client_registered':
+                        myClientId = data.clientId;
+                        myClientName = `${getBrowserName()} (${getDeviceOS()})`;
+                        getDeviceDetails().then(deviceInfo => {
+                            sendCommand('register_client', { 
+                                name: myClientName, 
+                                device: deviceInfo,
+                                deviceId: getDeviceId()
+                            });
+                        });
+                        break;
+                    case 'client_list':
+                        renderClientList(data);
+                        break;
+                    case 'device_history':
+                        renderDeviceHistory(data);
                         break;
                     case 'state':
                         updatePlayerUI(data);
@@ -524,7 +548,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Send Command Helper ---
     function sendCommand(type, data = null) {
         if (socket && socket.readyState === WebSocket.OPEN) {
-            socket.send(JSON.stringify({ type, data }));
+            socket.send(JSON.stringify({ type, data, deviceId: getDeviceId() }));
         }
     }
 
@@ -653,6 +677,16 @@ document.addEventListener('DOMContentLoaded', () => {
             trackTitle.textContent = playbackState.track.title;
             trackArtist.textContent = playbackState.track.artist;
 
+            const reqEl = document.getElementById('track-request-by');
+            if (reqEl) {
+                if (playbackState.track.requestedBy) {
+                    reqEl.innerHTML = `<i class="fa-solid fa-circle-user"></i> Requested by: <strong>${playbackState.track.requestedBy}</strong>`;
+                    reqEl.style.display = 'block';
+                } else {
+                    reqEl.style.display = 'none';
+                }
+            }
+
             const artUrl = getImageUrl(playbackState.track.albumArt) || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=500';
             if (albumArt.src !== artUrl) {
                 albumArt.src = artUrl;
@@ -661,6 +695,8 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             trackTitle.textContent = 'Not Playing';
             trackArtist.textContent = 'Connect your Spotify client';
+            const reqEl = document.getElementById('track-request-by');
+            if (reqEl) reqEl.style.display = 'none';
             albumArt.src = 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=500';
             ambientGlow.style.backgroundImage = 'none';
         }
@@ -1227,6 +1263,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // Render current track in Queue tab
         if (queueData.current) {
             const artUrl = getImageUrl(queueData.current.albumArt) || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=50';
+            const reqHTML = queueData.current.requestedBy ? `
+                <span class="track-requested-by" style="font-size: 10px; color: var(--primary); font-weight: 600; display: inline-flex; align-items: center; gap: 4px; margin-top: 2px;">
+                    <i class="fa-solid fa-circle-user" style="font-size: 8px;"></i> ${queueData.current.requestedBy}
+                </span>
+            ` : '';
             queueCurrentItem.innerHTML = `
                 <div class="track-item" style="background: rgba(30, 215, 96, 0.08); border-color: rgba(30, 215, 96, 0.2)">
                     <div class="track-item-left">
@@ -1234,6 +1275,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div class="track-item-details">
                             <span class="track-item-title">${queueData.current.title}</span>
                             <span class="track-item-artist">${queueData.current.artist}</span>
+                            ${reqHTML}
                         </div>
                     </div>
                     <div class="track-item-right">
@@ -1280,6 +1322,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 `;
             }
 
+            const reqHTML = track.requestedBy ? `
+                <span class="track-requested-by" style="font-size: 10px; color: var(--primary); font-weight: 600; display: inline-flex; align-items: center; gap: 4px; margin-top: 2px;">
+                    <i class="fa-solid fa-circle-user" style="font-size: 8px;"></i> ${track.requestedBy}
+                </span>
+            ` : '';
+
             trackItem.innerHTML = `
                 <div class="track-item-left">
                     ${dragHandleHTML}
@@ -1287,6 +1335,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="track-item-details">
                         <span class="track-item-title">${track.title}</span>
                         <span class="track-item-artist">${track.artist}</span>
+                        ${reqHTML}
                     </div>
                 </div>
                 ${rightPartHTML}
@@ -1418,6 +1467,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- Sync queue data to the modal (bottom-sheet) ---
         if (queueData.current) {
             const artUrl = getImageUrl(queueData.current.albumArt) || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=50';
+            const reqHTML = queueData.current.requestedBy ? `
+                <span class="track-requested-by" style="font-size: 10px; color: var(--primary); font-weight: 600; display: inline-flex; align-items: center; gap: 4px; margin-top: 2px;">
+                    <i class="fa-solid fa-circle-user" style="font-size: 8px;"></i> ${queueData.current.requestedBy}
+                </span>
+            ` : '';
             queueModalCurrentItem.innerHTML = `
                 <div class="track-item" style="background: rgba(30, 215, 96, 0.08); border-color: rgba(30, 215, 96, 0.2)">
                     <div class="track-item-left">
@@ -1425,6 +1479,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div class="track-item-details">
                             <span class="track-item-title">${queueData.current.title}</span>
                             <span class="track-item-artist">${queueData.current.artist}</span>
+                            ${reqHTML}
                         </div>
                     </div>
                     <div class="track-item-right">
@@ -1485,6 +1540,213 @@ document.addEventListener('DOMContentLoaded', () => {
                 return closest;
             }
         }, { offset: Number.NEGATIVE_INFINITY }).element;
+    }
+
+    // --- Connected Clients Helpers & Listeners ---
+    function getDeviceDetails() {
+        const ua = navigator.userAgent;
+        let device = 'Web Browser';
+        if (/tablet|ipad|playbook|silk/i.test(ua)) {
+            device = 'Tablet';
+        } else if (/Mobile|Android|iP(hone|od)|IEMobile|BlackBerry|Kindle/i.test(ua)) {
+            device = 'Mobile';
+        } else {
+            device = 'Desktop';
+        }
+        
+        let os = '';
+        if (ua.indexOf('Win') !== -1) os = 'Windows';
+        else if (ua.indexOf('Mac') !== -1) os = 'macOS';
+        else if (ua.indexOf('X11') !== -1) os = 'Linux';
+        else if (ua.indexOf('Linux') !== -1) os = 'Linux';
+        else if (/Android/i.test(ua)) os = 'Android';
+        else if (/iPhone|iPad|iPod/i.test(ua)) os = 'iOS';
+        
+        return os ? `${device} (${os})` : device;
+    }
+
+    // --- Connected Clients Helpers & Listeners ---
+    function getBrowserName() {
+        const ua = navigator.userAgent;
+        if (ua.indexOf('Chrome') !== -1 && ua.indexOf('Chromium') === -1 && ua.indexOf('Edg') === -1 && ua.indexOf('OPR') === -1) return 'Chrome';
+        if (ua.indexOf('Safari') !== -1 && ua.indexOf('Chrome') === -1 && ua.indexOf('Chromium') === -1) return 'Safari';
+        if (ua.indexOf('Firefox') !== -1) return 'Firefox';
+        if (ua.indexOf('Edg') !== -1) return 'Edge';
+        if (ua.indexOf('OPR') !== -1 || ua.indexOf('Opera') !== -1) return 'Opera';
+        return 'Web Browser';
+    }
+
+    function getDeviceOS() {
+        const ua = navigator.userAgent;
+        if (ua.indexOf('Win') !== -1) return 'Windows';
+        if (ua.indexOf('Mac') !== -1) return 'macOS';
+        if (/Android/i.test(ua)) return 'Android';
+        if (ua.indexOf('X11') !== -1 || ua.indexOf('Linux') !== -1) return 'Linux';
+        if (/iPhone|iPad|iPod/i.test(ua)) return 'iOS';
+        return 'Unknown OS';
+    }
+
+    async function getDeviceDetails() {
+        const ua = navigator.userAgent;
+        let device = 'Web Browser';
+        if (/tablet|ipad|playbook|silk/i.test(ua)) {
+            device = 'Tablet';
+        } else if (/Mobile|Android|iP(hone|od)|IEMobile|BlackBerry|Kindle/i.test(ua)) {
+            device = 'Mobile';
+        } else {
+            device = 'Desktop';
+        }
+        
+        let os = getDeviceOS();
+        let baseDetails = os !== 'Unknown OS' ? `${device} (${os})` : device;
+
+        // Fetch precise hardware model using User-Agent Client Hints API if supported
+        if (navigator.userAgentData && typeof navigator.userAgentData.getHighEntropyValues === 'function') {
+            try {
+                const hints = await navigator.userAgentData.getHighEntropyValues(['model']);
+                if (hints && hints.model) {
+                    return `${baseDetails} - ${hints.model}`;
+                }
+            } catch (err) {
+                console.warn('Failed to resolve precise device model:', err);
+            }
+        }
+        
+        return baseDetails;
+    }
+
+    // Detail view switching and back button event handlers
+    const clientsViewList = document.getElementById('clients-view-list');
+    const clientsViewDetails = document.getElementById('clients-view-details');
+    const btnDetailsBack = document.getElementById('btn-details-back');
+    const detailsDeviceName = document.getElementById('details-device-name');
+    const detailsMetaDevice = document.getElementById('details-meta-device');
+    const detailsMetaId = document.getElementById('details-meta-id');
+    const detailsHistoryContainer = document.getElementById('details-history-container');
+
+    if (btnDetailsBack) {
+        btnDetailsBack.addEventListener('click', () => {
+            clientsViewDetails.classList.remove('active');
+            clientsViewList.classList.add('active');
+        });
+    }
+
+    function renderClientList(list) {
+        clientsCount.textContent = list.length;
+        clientsCount.style.display = list.length > 1 ? 'flex' : 'none';
+
+        clientsListContainer.innerHTML = '';
+        list.forEach(client => {
+            const isMe = client.clientId === myClientId;
+            const item = document.createElement('div');
+            item.className = `client-item ${isMe ? 'is-me' : ''}`;
+            
+            // Determine icon based on device name
+            let iconClass = 'fa-solid fa-laptop';
+            if (client.device.toLowerCase().includes('mobile')) {
+                iconClass = 'fa-solid fa-mobile-screen-button';
+            } else if (client.device.toLowerCase().includes('tablet')) {
+                iconClass = 'fa-solid fa-tablet-screen-button';
+            }
+
+            item.innerHTML = `
+                <div class="client-icon">
+                    <i class="${iconClass}"></i>
+                </div>
+                <div class="client-info">
+                    <div class="client-name">${client.name}</div>
+                    <div class="client-device">${client.device}</div>
+                </div>
+                ${isMe ? '<span class="client-tag-me">Me</span>' : ''}
+                <button class="btn-client-detail">Detail</button>
+            `;
+
+            // Bind click to show details
+            const btnDetail = item.querySelector('.btn-client-detail');
+            if (btnDetail) {
+                btnDetail.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    detailsDeviceName.textContent = client.name;
+                    detailsMetaDevice.textContent = client.device;
+                    detailsMetaId.textContent = client.deviceId || 'unknown';
+                    
+                    // Clear history container and show loading state
+                    detailsHistoryContainer.innerHTML = '<div style="padding: 10px; text-align: center; color: var(--text-muted); font-size: 11px;">Loading history...</div>';
+                    
+                    // Switch view
+                    clientsViewList.classList.remove('active');
+                    clientsViewDetails.classList.add('active');
+
+                    // Request history
+                    sendCommand('get_history', { targetDeviceId: client.deviceId });
+                });
+            }
+
+            clientsListContainer.appendChild(item);
+        });
+    }
+
+    function renderDeviceHistory(data) {
+        if (!data || data.deviceId !== detailsMetaId.textContent) return;
+        
+        detailsHistoryContainer.innerHTML = '';
+        const history = data.history || [];
+        if (history.length === 0) {
+            detailsHistoryContainer.innerHTML = '<div style="padding: 10px; text-align: center; color: var(--text-muted); font-size: 11px;">No history records found.</div>';
+            return;
+        }
+
+        history.forEach(item => {
+            const date = new Date(item.timestamp);
+            const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            
+            const historyItem = document.createElement('div');
+            historyItem.className = 'history-item';
+            
+            let detailsText = '';
+            if (item.action === 'connect') {
+                detailsText = `Connected from ${item.details?.ip || 'unknown IP'}`;
+            } else if (item.action === 'add_queue') {
+                detailsText = `Added song to queue`;
+            } else if (item.action === 'reorder_queue') {
+                detailsText = `Reordered queue items`;
+            } else if (item.action === 'next') {
+                detailsText = `Skipped track (Next)`;
+            } else if (item.action === 'back') {
+                detailsText = `Went to previous track (Back)`;
+            } else {
+                detailsText = JSON.stringify(item.details) || '';
+            }
+
+            historyItem.innerHTML = `
+                <span class="history-time">${timeStr}</span>
+                <span class="history-action ${item.action}">${item.action.replace('_', ' ')}</span>
+                <span class="history-details">${detailsText}</span>
+            `;
+            detailsHistoryContainer.appendChild(historyItem);
+        });
+    }
+
+    // Toggle popover visibility
+    btnClientsToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        clientsPopover.classList.toggle('open');
+    });
+
+    // Close popover when clicking outside
+    document.addEventListener('click', (e) => {
+        if (clientsPopover.classList.contains('open') && !clientsPopover.contains(e.target) && e.target !== btnClientsToggle) {
+            clientsPopover.classList.remove('open');
+        }
+    });
+
+    function getDeviceId() {
+        let id = localStorage.getItem('spotify_web_controller_device_id');
+        if (!id) {
+            id = 'dev-' + Math.random().toString(36).substring(2, 15) + '-' + Math.random().toString(36).substring(2, 15);
+            localStorage.setItem('spotify_web_controller_device_id', id);
+        }
+        return id;
     }
 
     // Start WebSocket Connection
