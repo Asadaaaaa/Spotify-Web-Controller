@@ -59,8 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // PiP Instructions Modal Elements
     const pipModalOverlay = document.getElementById('pip-modal-overlay');
     const btnClosePipModal = document.getElementById('btn-close-pip-modal');
-    const btnCopyFlag = document.getElementById('btn-copy-flag');
-    const pipModalOrigin = document.getElementById('pip-modal-origin');
+    const pipHttpsLink = document.getElementById('pip-https-link');
 
     // Lyrics Elements
     const lyricsPlaceholder = document.getElementById('lyrics-placeholder');
@@ -298,8 +297,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } else {
             if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-                if (pipModalOrigin) {
-                    pipModalOrigin.textContent = window.location.origin;
+                if (pipHttpsLink) {
+                    const secureUrl = `https://${window.location.hostname}:8443`;
+                    pipHttpsLink.href = secureUrl;
+                    pipHttpsLink.textContent = secureUrl;
                 }
                 if (pipModalOverlay) {
                     pipModalOverlay.classList.add('open');
@@ -325,26 +326,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (e.target === pipModalOverlay) {
                 pipModalOverlay.classList.remove('open');
             }
-        });
-    }
-
-    if (btnCopyFlag) {
-        btnCopyFlag.addEventListener('click', () => {
-            const flagText = document.getElementById('flag-text');
-            const textToCopy = flagText ? flagText.textContent : 'chrome://flags/#unsafely-treat-insecure-origin-as-secure';
-            navigator.clipboard.writeText(textToCopy)
-                .then(() => {
-                    const originalHTML = btnCopyFlag.innerHTML;
-                    btnCopyFlag.innerHTML = '<i class="fa-solid fa-check"></i> Copied!';
-                    btnCopyFlag.style.background = '#1ed760';
-                    setTimeout(() => {
-                        btnCopyFlag.innerHTML = originalHTML;
-                        btnCopyFlag.style.background = '';
-                    }, 2000);
-                })
-                .catch(err => {
-                    console.error('Failed to copy: ', err);
-                });
         });
     }
 

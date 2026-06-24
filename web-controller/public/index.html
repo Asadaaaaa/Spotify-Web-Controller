@@ -292,20 +292,13 @@
                 </button>
             </div>
             <div class="pip-modal-body">
-                <p>Document Picture-in-Picture is disabled by Chrome because this page is loaded over HTTP using a local network IP.</p>
+                <p>Document Picture-in-Picture requires a secure context (HTTPS) when accessed from other devices on the network.</p>
                 <div class="instructions-card">
-                    <h4>How to enable Picture-in-Picture:</h4>
-                    <ol>
-                        <li>Allow this insecure origin by copying the link below and pasting it into your browser address bar:
-                            <div class="flag-copy-container">
-                                <code class="code-highlight" id="flag-text">chrome://flags/#unsafely-treat-insecure-origin-as-secure</code>
-                                <button id="btn-copy-flag" class="btn-copy" title="Copy to clipboard">
-                                    <i class="fa-regular fa-copy"></i> Copy
-                                </button>
-                            </div>
-                        </li>
-                        <li>Enable the setting, add <code class="code-highlight" id="pip-modal-origin">http://192.168.123.51:8080</code> to the text area, and click **Relaunch**.</li>
-                    </ol>
+                    <h4>Please visit the secure HTTPS version:</h4>
+                    <div class="flag-copy-container" style="margin-top: 12px; margin-bottom: 12px;">
+                        <a href="#" id="pip-https-link" class="code-highlight" style="color: #1ed760; text-decoration: underline; font-weight: 600; font-size: 16px;">https://localhost:8443</a>
+                    </div>
+                    <p style="font-size: 12px; margin-top: 8px; margin-bottom: 0; opacity: 0.8; line-height: 1.4;">Note: When the page loads, your browser will display a certificate warning. Click <strong>Advanced / Lanjutan</strong> and select <strong>Proceed / Lanjutkan ke IP (unsafe)</strong> to proceed securely.</p>
                 </div>
             </div>
         </div>
