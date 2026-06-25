@@ -1927,7 +1927,7 @@ body {
 .blocked-keywords-container {
     position: relative;
     z-index: 1000;
-    display: inline-block;
+    display: none; /* Hidden by default, shown via JS only on localhost/127.0.0.1 */
 }
 
 /* Popover: matches clients-popover style (absolute positioned below the button, right-aligned) */

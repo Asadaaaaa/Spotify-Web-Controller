@@ -1833,6 +1833,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnBlockedAdd = document.getElementById('btn-blocked-add');
     const btnBlockedApply = document.getElementById('btn-blocked-apply');
 
+    // Only show the blocked keywords controls if host is localhost or 127.0.0.1
+    const blockedKeywordsContainer = document.querySelector('.blocked-keywords-container');
+    if (blockedKeywordsContainer) {
+        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        if (isLocalhost) {
+            blockedKeywordsContainer.style.display = 'inline-block';
+        } else {
+            blockedKeywordsContainer.style.display = 'none';
+        }
+    }
+
     /**
      * Render the tag chips inside the blocked keywords popover.
      * Each chip shows the keyword text and an X button to remove it.
