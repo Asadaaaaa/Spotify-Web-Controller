@@ -41,11 +41,23 @@
                     const urlStr = typeof url === 'string' ? url : (url?.url || '');
                     if (urlStr.includes('api-partner.spotify.com')) {
                         const headers = opts?.headers || {};
-                        if (headers['client-token']) {
-                            self.capturedClientToken = headers['client-token'];
+                        
+                        // Extract headers with case insensitivity
+                        let clientToken = '';
+                        let auth = '';
+                        for (const key of Object.keys(headers)) {
+                            if (key.toLowerCase() === 'client-token') {
+                                clientToken = headers[key];
+                            } else if (key.toLowerCase() === 'authorization') {
+                                auth = headers[key];
+                            }
                         }
-                        if (headers['authorization']) {
-                            self.capturedAccessToken = headers['authorization'].replace('Bearer ', '');
+
+                        if (clientToken) {
+                            self.capturedClientToken = clientToken;
+                        }
+                        if (auth) {
+                            self.capturedAccessToken = auth.replace('Bearer ', '');
                         }
                     }
                 } catch (err) {
@@ -585,6 +597,16 @@
                     extensions: { persistedQuery: { version: 1, sha256Hash: hash } }
                 })
             });
+
+            // Capture new tokens from successful/failed requests to keep them fresh
+            try {
+                const reqHeaders = resp.headers;
+                // If the response indicates authorization issues (e.g. 401 or 403), reset token to trigger recapturing
+                if (resp.status === 401 || resp.status === 403) {
+                    this.capturedAccessToken = null;
+                    this.capturedClientToken = null;
+                }
+            } catch (e) {}
 
             if (!resp.ok) {
                 const errText = await resp.text().catch(() => '');
