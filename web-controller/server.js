@@ -48,6 +48,13 @@ class SpotifyWebControllerServer {
         this.deviceNamesPath = path.join(this.cacheDir, 'device-names.json');
         this.deviceNames = this.loadDeviceNames();
 
+        // --- Blocked Keywords Filter ---
+        // Path and in-memory store for blocked keywords.
+        // Default keywords are seeded on first run (when no file exists).
+        // Used to block songs by title/artist match (case-insensitive, min 5 chars).
+        this.blockedKeywordsPath = path.join(this.cacheDir, 'blocked-keywords.json');
+        this.blockedKeywords = this.loadBlockedKeywords();
+
         this.initMiddleware();
         this.initWebSocket();
     }
@@ -69,6 +76,44 @@ class SpotifyWebControllerServer {
             fs.writeFileSync(this.deviceNamesPath, JSON.stringify(this.deviceNames, null, 2));
         } catch (e) {
             console.error('Failed to save device names:', e);
+        }
+    }
+
+    /**
+     * Load blocked keywords from local server storage.
+     * If the file does not exist yet, seed with sensible defaults.
+     * Each keyword must be at least 5 characters long; matching is case-insensitive
+     * and uses substring (wildcard-style) comparison against track title and artist.
+     */
+    loadBlockedKeywords() {
+        const defaults = ["Baon Cikadap", "Lagu Jorok", "Oke Gas", "Jokowi"];
+        try {
+            if (!fs.existsSync(this.blockedKeywordsPath)) {
+                const seed = { keywords: defaults };
+                fs.mkdirSync(this.cacheDir, { recursive: true });
+                fs.writeFileSync(this.blockedKeywordsPath, JSON.stringify(seed, null, 2));
+                return seed;
+            }
+            const raw = fs.readFileSync(this.blockedKeywordsPath, 'utf8');
+            const parsed = JSON.parse(raw);
+            return {
+                keywords: Array.isArray(parsed?.keywords) ? parsed.keywords : defaults
+            };
+        } catch (err) {
+            console.error('Failed to load blocked keywords:', err);
+            return { keywords: defaults };
+        }
+    }
+
+    /**
+     * Persist blocked keywords to local disk.
+     */
+    saveBlockedKeywords() {
+        try {
+            fs.mkdirSync(this.cacheDir, { recursive: true });
+            fs.writeFileSync(this.blockedKeywordsPath, JSON.stringify(this.blockedKeywords, null, 2));
+        } catch (err) {
+            console.error('Failed to save blocked keywords:', err);
         }
     }
 
@@ -487,6 +532,12 @@ class SpotifyWebControllerServer {
             }
         }));
 
+        // Send current blocked keywords list to the new client so the UI can enforce filtering immediately
+        ws.send(JSON.stringify({
+            type: 'blocked_keywords',
+            data: { keywords: this.blockedKeywords.keywords }
+        }));
+
         // Request full state from Spotify if it's connected, so new client gets immediate update
         if (this.spotifySocket && this.spotifySocket.readyState === WebSocket.OPEN) {
             this.spotifySocket.send(JSON.stringify({ type: 'request_state' }));
@@ -533,6 +584,33 @@ class SpotifyWebControllerServer {
                             history: history
                         }
                     }));
+                    return;
+                }
+
+                // --- Blocked Keywords Handlers ---
+                // Client requests the current blocked keywords list
+                if (parsed.type === 'get_blocked_keywords') {
+                    ws.send(JSON.stringify({
+                        type: 'blocked_keywords',
+                        data: { keywords: this.blockedKeywords.keywords }
+                    }));
+                    return;
+                }
+
+                // Client submits an updated blocked keywords list
+                if (parsed.type === 'update_blocked_keywords') {
+                    const newKeywords = Array.isArray(parsed?.data?.keywords)
+                        ? parsed.data.keywords.filter(kw => typeof kw === 'string' && kw.trim().length >= 5)
+                        : [];
+                    // Persist to disk
+                    this.blockedKeywords.keywords = newKeywords;
+                    this.saveBlockedKeywords();
+                    // Broadcast the updated list to ALL connected clients so filtering is in sync everywhere
+                    this.broadcastToClients({
+                        type: 'blocked_keywords',
+                        data: { keywords: newKeywords }
+                    });
+                    console.log(`[Blocked Keywords] Updated by ${ws.clientName}. Count: ${newKeywords.length}`);
                     return;
                 }
 

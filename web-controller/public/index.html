@@ -131,6 +131,38 @@
                     </div>
                 </div>
 
+                <!-- Blocked Keywords Toggle & Popover -->
+                <div class="blocked-keywords-container">
+                    <button id="btn-blocked-toggle" class="btn-header-action" title="Blocked Keywords">
+                        <i class="fa-solid fa-ban"></i>
+                        <span class="badge" id="blocked-badge" style="display: none;">0</span>
+                    </button>
+
+                    <div class="blocked-popover" id="blocked-popover">
+                        <div class="blocked-header">
+                            <h3><i class="fa-solid fa-ban"></i> Blocked Keywords</h3>
+                        </div>
+                        <div class="blocked-body">
+                            <p class="blocked-desc">
+                                Songs whose title or artist name matches any keyword will be blocked from playing or queuing.
+                            </p>
+                            <div class="blocked-tags" id="blocked-tags-container"></div>
+                            <div class="blocked-input-row">
+                                <input type="text" id="blocked-input" placeholder="Add keyword..." autocomplete="off">
+                                <button id="btn-blocked-add" class="btn-small-check" title="Add keyword">
+                                    <i class="fa-solid fa-plus"></i>
+                                </button>
+                            </div>
+                            <p class="blocked-hint">
+                                Separate with commas. Minimum 5 characters per keyword. Matching is case-insensitive.
+                            </p>
+                            <button id="btn-blocked-apply" class="btn-blocked-apply">
+                                <i class="fa-solid fa-check"></i> Apply Changes
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <a href="https://github.com/Asadaaaaa/Spotify-Web-Controller" target="_blank" rel="noopener noreferrer"
                     class="github-stars-badge" id="github-stars-badge">
                     <span class="github-stars-left">

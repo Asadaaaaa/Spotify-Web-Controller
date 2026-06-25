@@ -1919,3 +1919,242 @@ body {
     }
 }
 
+/* ======================================================
+   BLOCKED KEYWORDS FILTER
+   ====================================================== */
+
+/* Container wrapping the button and popover, same relative-position pattern as clients-floating-container */
+.blocked-keywords-container {
+    position: relative;
+    z-index: 1000;
+    display: inline-block;
+}
+
+/* Popover: matches clients-popover style (absolute positioned below the button, right-aligned) */
+.blocked-popover {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: 320px;
+    max-height: 420px;
+    background: rgba(18, 18, 18, 0.9);
+    backdrop-filter: blur(25px) saturate(180%);
+    -webkit-backdrop-filter: blur(25px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 18px;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    opacity: 0;
+    transform: translateY(-15px) scale(0.95);
+    pointer-events: none;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    transform-origin: top right;
+}
+
+.blocked-popover.open {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
+}
+
+.blocked-header {
+    display: flex;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    flex-shrink: 0;
+}
+
+.blocked-header h3 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-main);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.blocked-header h3 i {
+    color: #e91429; /* Red for the ban icon to signal blocking */
+}
+
+.blocked-body {
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.blocked-desc {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.5;
+    margin: 0;
+}
+
+/* Tag chips container — flexbox wrap for multiple keyword pills */
+.blocked-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-height: 32px;
+    padding: 4px 0;
+}
+
+/* Individual keyword tag chip */
+.blocked-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 20px;
+    padding: 4px 10px 4px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-main);
+    line-height: 1.4;
+    transition: var(--transition);
+}
+
+.blocked-tag:hover {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+/* Remove / X button inside each tag chip */
+.blocked-tag-remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-muted);
+    font-size: 10px;
+    cursor: pointer;
+    transition: var(--transition);
+    padding: 0;
+    line-height: 1;
+}
+
+.blocked-tag-remove:hover {
+    background: #e91429;
+    color: #fff;
+}
+
+/* Input row: text field + add button */
+.blocked-input-row {
+    display: flex;
+    gap: 8px;
+}
+
+.blocked-input-row input {
+    flex: 1;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: var(--text-main);
+    font-size: 13px;
+    outline: none;
+    transition: var(--transition);
+}
+
+.blocked-input-row input:focus {
+    border-color: var(--primary);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.blocked-input-row .btn-small-check {
+    flex-shrink: 0;
+}
+
+/* Hint text below the input row */
+.blocked-hint {
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.4;
+    margin: 0;
+}
+
+/* Full-width apply button at the bottom of the popover */
+.btn-blocked-apply {
+    width: 100%;
+    background: var(--primary);
+    color: #121212;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 16px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: var(--transition);
+    margin-top: 4px;
+}
+
+.btn-blocked-apply:hover {
+    background: rgba(30, 215, 96, 0.85);
+    transform: translateY(-1px);
+}
+
+.btn-blocked-apply:active {
+    transform: translateY(0);
+}
+
+/* ======================================================
+   BLOCKED STATE FOR SEARCH RESULTS
+   ====================================================== */
+
+/* Applies to track items that match a blocked keyword — dimmed and non-interactive */
+.track-item.blocked {
+    opacity: 0.35;
+    pointer-events: none;
+    cursor: not-allowed;
+}
+
+.track-item.blocked .track-item-title {
+    text-decoration: line-through;
+    color: var(--text-muted);
+}
+
+.track-item.blocked .track-item-art {
+    filter: grayscale(1);
+}
+
+/* ======================================================
+   RESPONSIVE: BLOCKED KEYWORDS POPOVER ON SMALL SCREENS
+   ====================================================== */
+@media (max-width: 480px) {
+    .blocked-popover {
+        position: fixed;
+        top: 74px;
+        bottom: auto;
+        left: 0;
+        right: 0;
+        width: 100vw;
+        max-height: 60vh;
+        border-radius: 0 0 24px 24px;
+        border-left: none;
+        border-right: none;
+        border-top: none;
+        transform: translateY(-100%);
+        transform-origin: top center;
+        transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease;
+    }
+
+    .blocked-popover.open {
+        transform: translateY(0);
+    }
+}
+
