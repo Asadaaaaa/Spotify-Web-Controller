@@ -55,6 +55,23 @@ class SpotifyWebControllerServer {
         this.blockedKeywordsPath = path.join(this.cacheDir, 'blocked-keywords.json');
         this.blockedKeywords = this.loadBlockedKeywords();
 
+        this.serverId = crypto.randomUUID();
+
+        // Watch the public directory for changes to trigger auto-reload on clients
+        const publicDir = path.join(__dirname, 'public');
+        if (fs.existsSync(publicDir)) {
+            let watchTimeout = null;
+            fs.watch(publicDir, { recursive: true }, (eventType, filename) => {
+                if (filename) {
+                    if (watchTimeout) clearTimeout(watchTimeout);
+                    watchTimeout = setTimeout(() => {
+                        console.log(`File changed in public: ${filename}. Notifying clients to refresh.`);
+                        this.broadcastToClients({ type: 'reload_client' });
+                    }, 250);
+                }
+            });
+        }
+
         this.initMiddleware();
         this.initWebSocket();
     }
@@ -528,7 +545,8 @@ class SpotifyWebControllerServer {
             data: {
                 clientId: ws.clientId,
                 name: ws.clientName,
-                device: ws.clientDevice
+                device: ws.clientDevice,
+                serverId: this.serverId
             }
         }));
 

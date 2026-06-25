@@ -122,6 +122,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Blocked keywords filter state — populated from server on connect
     // Each keyword is a string; matching is case-insensitive, min 5 chars
     let blockedKeywords = [];
+    let currentServerId = null;
 
     // Convert spotify image URIs to public HTTP URLs
     function getImageUrl(uri) {
@@ -483,6 +484,15 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                         break;
                     case 'client_registered':
+                        if (data.serverId) {
+                            if (currentServerId === null) {
+                                currentServerId = data.serverId;
+                            } else if (currentServerId !== data.serverId) {
+                                console.log('Server updated/restarted. Reloading page...');
+                                window.location.reload();
+                                break;
+                            }
+                        }
                         myClientId = data.clientId;
                         myClientName = `${getBrowserName()} (${getDeviceOS()})`;
                         getDeviceDetails().then(deviceInfo => {
@@ -492,6 +502,10 @@ document.addEventListener('DOMContentLoaded', () => {
                                 deviceId: getDeviceId()
                             });
                         });
+                        break;
+                    case 'reload_client':
+                        console.log('Received reload signal from server. Reloading...');
+                        window.location.reload();
                         break;
                     case 'client_list':
                         renderClientList(data);
