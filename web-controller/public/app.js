@@ -119,6 +119,10 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     let isMobileLyricsOpen = false;
 
+    // Blocked keywords filter state — populated from server on connect
+    // Each keyword is a string; matching is case-insensitive, min 5 chars
+    let blockedKeywords = [];
+
     // Convert spotify image URIs to public HTTP URLs
     function getImageUrl(uri) {
         if (!uri) return '';
@@ -512,6 +516,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     break;
                 case 'lyrics':
                     updateLyricsUI(data);
+                    break;
+                case 'blocked_keywords':
+                    // Update the local blocked keywords list and refresh search results + badge
+                    blockedKeywords = Array.isArray(data.keywords) ? data.keywords : [];
+                    updateBlockedBadge();
+                    // Re-apply blocking to search results currently displayed
+                    reapplyBlockedState();
                     break;
             }
             } catch (err) {
@@ -1080,11 +1091,15 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
             trackItem.querySelector('.btn-play-now').addEventListener('click', (e) => {
                 e.stopPropagation();
+                // Blocked keyword guard — prevent playing songs that match the filter
+                if (isTrackBlocked(track)) return;
                 sendCommand('play_track', track.uri);
                 searchResultsOverlay.classList.remove('open');
             });
             trackItem.querySelector('.btn-add-queue').addEventListener('click', (e) => {
                 e.stopPropagation();
+                // Blocked keyword guard — prevent queueing songs that match the filter
+                if (isTrackBlocked(track)) return;
                 sendCommand('add_queue', track.uri);
                 const icon = e.currentTarget.querySelector('i');
                 icon.className = 'fa-solid fa-check';
@@ -1094,6 +1109,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     icon.style.color = '';
                 }, 1500);
             });
+
+            // Apply blocked state visual styling and disable interactions
+            if (isTrackBlocked(track)) {
+                trackItem.classList.add('blocked');
+                const playBtn = trackItem.querySelector('.btn-play-now');
+                const queueBtn = trackItem.querySelector('.btn-add-queue');
+                if (playBtn) { playBtn.disabled = true; playBtn.title = 'Blocked by keyword filter'; }
+                if (queueBtn) { queueBtn.disabled = true; queueBtn.title = 'Blocked by keyword filter'; }
+            }
             return trackItem;
         }
 
@@ -1727,9 +1751,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Toggle popover visibility
+    // Toggle popover visibility — also close the blocked keywords popover if open
     btnClientsToggle.addEventListener('click', (e) => {
         e.stopPropagation();
+        if (blockedPopover) blockedPopover.classList.remove('open');
         clientsPopover.classList.toggle('open');
     });
 
@@ -1748,6 +1773,172 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         return id;
     }
+
+    // =========================================================================
+    // BLOCKED KEYWORDS FILTER
+    // =========================================================================
+
+    /**
+     * Check whether a track matches any blocked keyword.
+     * Matching is case-insensitive and uses substring (wildcard-style) comparison.
+     * Returns true if the track title OR artist name contains a blocked keyword of 5+ chars.
+     */
+    function isTrackBlocked(track) {
+        if (!track || blockedKeywords.length === 0) return false;
+        const fields = [track.title, track.artist].filter(Boolean).map(s => s.toLowerCase());
+        return blockedKeywords.some(kw => {
+            const needle = kw.toLowerCase();
+            if (needle.length < 5) return false;
+            return fields.some(field => field.includes(needle));
+        });
+    }
+
+    /**
+     * Update the badge count on the blocked keywords toggle button.
+     * Badge shows the number of active blocked keywords.
+     */
+    function updateBlockedBadge() {
+        const badge = document.getElementById('blocked-badge');
+        if (!badge) return;
+        if (blockedKeywords.length > 0) {
+            badge.textContent = String(blockedKeywords.length);
+            badge.style.display = 'flex';
+        } else {
+            badge.style.display = 'none';
+        }
+    }
+
+    /**
+     * Re-apply the blocked visual state to visible search results.
+     * Called when the blocked keywords list changes while results are shown.
+     */
+    function reapplyBlockedState() {
+        const items = searchResultsList.querySelectorAll('.track-item');
+        // Reset all first
+        items.forEach(item => item.classList.remove('blocked'));
+        // Re-render to apply up-to-date blocking
+        // We iterate the original data tracks from the existing DOM (stored in data-track-id or re-trigger search)
+        // Simplest approach: re-trigger search if input is active, otherwise do nothing
+        const query = searchInput.value.trim();
+        if (query.length >= 2) {
+            performSearch(query);
+        }
+    }
+
+    // --- Blocked Keywords Popover DOM References ---
+    const btnBlockedToggle = document.getElementById('btn-blocked-toggle');
+    const blockedPopover = document.getElementById('blocked-popover');
+    const blockedTagsContainer = document.getElementById('blocked-tags-container');
+    const blockedInput = document.getElementById('blocked-input');
+    const btnBlockedAdd = document.getElementById('btn-blocked-add');
+    const btnBlockedApply = document.getElementById('btn-blocked-apply');
+
+    /**
+     * Render the tag chips inside the blocked keywords popover.
+     * Each chip shows the keyword text and an X button to remove it.
+     */
+    function renderBlockedTags() {
+        if (!blockedTagsContainer) return;
+        blockedTagsContainer.innerHTML = '';
+        if (blockedKeywords.length === 0) {
+            // Show a subtle empty state message
+            const emptyMsg = document.createElement('span');
+            emptyMsg.className = 'blocked-hint';
+            emptyMsg.style.width = '100%';
+            emptyMsg.style.textAlign = 'center';
+            emptyMsg.style.padding = '8px 0';
+            emptyMsg.textContent = 'No keywords added yet.';
+            blockedTagsContainer.appendChild(emptyMsg);
+            return;
+        }
+        blockedKeywords.forEach((kw, index) => {
+            const chip = document.createElement('span');
+            chip.className = 'blocked-tag';
+            chip.innerHTML = `
+                <span>${escapeHtml(kw)}</span>
+                <button class="blocked-tag-remove" data-index="${index}" title="Remove keyword">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            `;
+            // Bind remove action on the X button
+            const removeBtn = chip.querySelector('.blocked-tag-remove');
+            removeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                blockedKeywords.splice(index, 1);
+                renderBlockedTags();
+            });
+            blockedTagsContainer.appendChild(chip);
+        });
+    }
+
+    /**
+     * Add one or more keywords from the input field.
+     * Splits by comma, trims, filters to >= 5 chars, deduplicates, and re-renders.
+     */
+    function addKeywordsFromInput() {
+        if (!blockedInput) return;
+        const raw = blockedInput.value.trim();
+        if (!raw) return;
+        const newKeywords = raw.split(',')
+            .map(s => s.trim())
+            .filter(s => s.length >= 5 && !blockedKeywords.includes(s));
+        if (newKeywords.length === 0) return;
+        newKeywords.forEach(kw => blockedKeywords.push(kw));
+        blockedInput.value = '';
+        renderBlockedTags();
+    }
+
+    // Minimal HTML escaping utility for user-supplied keyword text shown in the UI
+    function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    // Toggle blocked keywords popover on button click
+    if (btnBlockedToggle && blockedPopover) {
+        btnBlockedToggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            // Close the clients popover if open, to avoid overlapping popovers
+            if (clientsPopover) clientsPopover.classList.remove('open');
+            // Re-render tags from current state every time the popover opens
+            renderBlockedTags();
+            blockedPopover.classList.toggle('open');
+        });
+    }
+
+    // Handle the Add button click on the input row
+    if (btnBlockedAdd) {
+        btnBlockedAdd.addEventListener('click', addKeywordsFromInput);
+    }
+
+    // Handle Enter key in the blocked keywords input
+    if (blockedInput) {
+        blockedInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addKeywordsFromInput();
+            }
+        });
+    }
+
+    // Handle the Apply Changes button: send updated list to server, close popover
+    if (btnBlockedApply) {
+        btnBlockedApply.addEventListener('click', () => {
+            sendCommand('update_blocked_keywords', { keywords: blockedKeywords });
+            if (blockedPopover) blockedPopover.classList.remove('open');
+        });
+    }
+
+    // Close blocked keywords popover when clicking outside
+    document.addEventListener('click', (e) => {
+        if (blockedPopover && blockedPopover.classList.contains('open')) {
+            const container = document.querySelector('.blocked-keywords-container');
+            if (container && !container.contains(e.target)) {
+                blockedPopover.classList.remove('open');
+            }
+        }
+    });
 
     // Start WebSocket Connection
     connectWS();
