@@ -504,12 +504,19 @@ class SpotifyWebControllerServer {
         }
         ws.deviceId = deviceId;
 
+        const hostHeader = request.headers.host || '';
+        ws.isLocalhost = hostHeader.includes('localhost') || hostHeader.includes('127.0.0.1');
+
         // Resolve or generate a readable random name using Haikunator
-        if (!this.deviceNames[deviceId]) {
-            this.deviceNames[deviceId] = haikunator.haikunate();
-            this.saveDeviceNames();
+        if (ws.isLocalhost) {
+            ws.clientName = 'HOST';
+        } else {
+            if (!this.deviceNames[deviceId] || this.deviceNames[deviceId].toUpperCase() === 'HOST') {
+                this.deviceNames[deviceId] = haikunator.haikunate();
+                this.saveDeviceNames();
+            }
+            ws.clientName = this.deviceNames[deviceId];
         }
-        ws.clientName = this.deviceNames[deviceId];
         
         // Parse User-Agent to extract device type and OS
         const ua = (request && request.headers && request.headers['user-agent']) || '';
@@ -572,7 +579,65 @@ class SpotifyWebControllerServer {
                 if (parsed.type === 'register_client') {
                     if (parsed.data) {
                         if (parsed.data.device) ws.clientDevice = parsed.data.device;
-                        
+                        if (ws.isLocalhost) {
+                            ws.clientName = 'HOST';
+                        } else if (parsed.data.name) {
+                            let proposedName = parsed.data.name;
+                            if (proposedName.toUpperCase() === 'HOST') {
+                                proposedName = this.deviceNames[ws.deviceId] || haikunator.haikunate();
+                            }
+                            ws.clientName = proposedName;
+                            if (ws.deviceId) {
+                                this.deviceNames[ws.deviceId] = proposedName;
+                                this.saveDeviceNames();
+                            }
+                        }
+                        this.broadcastClientList();
+                    }
+                    return;
+                }
+
+                // Handle custom rename request from admin/localhost
+                if (parsed.type === 'rename_device') {
+                    if (parsed.data && parsed.data.deviceId && parsed.data.name) {
+                        const targetDeviceId = parsed.data.deviceId;
+                        const newName = parsed.data.name;
+
+                        // Only allow rename if this socket is localhost/admin
+                        if (!ws.isLocalhost) {
+                            return;
+                        }
+
+                        // Prevent setting name to "HOST" (case-insensitive)
+                        if (newName.toUpperCase() === 'HOST') {
+                            return;
+                        }
+
+                        // Prevent renaming a socket that is localhost (HOST)
+                        const targetSocket = Array.from(this.clientSockets).find(s => s.deviceId === targetDeviceId);
+                        if (targetSocket && targetSocket.isLocalhost) {
+                            return;
+                        }
+
+                        // Save new name to database
+                        this.deviceNames[targetDeviceId] = newName;
+                        this.saveDeviceNames();
+
+                        // Notify all active sockets under this deviceId of their new name
+                        for (let clientSocket of this.clientSockets) {
+                            if (clientSocket.deviceId === targetDeviceId) {
+                                clientSocket.clientName = newName;
+                                clientSocket.send(JSON.stringify({
+                                    type: 'client_registered',
+                                    data: {
+                                        clientId: clientSocket.clientId,
+                                        name: newName,
+                                        device: clientSocket.clientDevice,
+                                        serverId: this.serverId
+                                    }
+                                }));
+                            }
+                        }
                         this.broadcastClientList();
                     }
                     return;

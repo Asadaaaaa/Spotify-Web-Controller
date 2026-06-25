@@ -494,7 +494,11 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                         }
                         myClientId = data.clientId;
-                        myClientName = `${getBrowserName()} (${getDeviceOS()})`;
+                        myClientName = data.name || 'unknown';
+
+                        // Clean up legacy localStorage client name
+                        localStorage.removeItem('spotify_web_controller_device_name');
+
                         getDeviceDetails().then(deviceInfo => {
                             sendCommand('register_client', { 
                                 name: myClientName, 
@@ -1674,7 +1678,17 @@ document.addEventListener('DOMContentLoaded', () => {
         clientsCount.style.display = list.length > 1 ? 'flex' : 'none';
 
         clientsListContainer.innerHTML = '';
-        list.forEach(client => {
+        
+        // Sort client list so "Me" is always at the top
+        const sortedList = [...list].sort((a, b) => {
+            const aIsMe = a.clientId === myClientId;
+            const bIsMe = b.clientId === myClientId;
+            if (aIsMe && !bIsMe) return -1;
+            if (!aIsMe && bIsMe) return 1;
+            return 0;
+        });
+
+        sortedList.forEach(client => {
             const isMe = client.clientId === myClientId;
             const item = document.createElement('div');
             item.className = `client-item ${isMe ? 'is-me' : ''}`;
@@ -1708,6 +1722,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     detailsMetaDevice.textContent = client.device;
                     detailsMetaId.textContent = client.deviceId || 'unknown';
                     
+                    // Show rename button only if the CURRENT client is localhost/admin/HOST
+                    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+                    if (isLocalhost && btnRenameDevice) {
+                        btnRenameDevice.style.display = 'inline-flex';
+                    } else if (btnRenameDevice) {
+                        btnRenameDevice.style.display = 'none';
+                    }
+
                     // Clear history container and show loading state
                     detailsHistoryContainer.innerHTML = '<div style="padding: 10px; text-align: center; color: var(--text-muted); font-size: 11px;">Loading history...</div>';
                     
@@ -1721,6 +1743,28 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             clientsListContainer.appendChild(item);
+        });
+    }
+
+    // Rename device functionality (only for localhost/admin/HOST)
+    const btnRenameDevice = document.getElementById('btn-rename-device');
+    if (btnRenameDevice) {
+        btnRenameDevice.addEventListener('click', () => {
+            const targetDeviceId = detailsMetaId.textContent;
+            const currentName = detailsDeviceName.textContent;
+            if (targetDeviceId === 'unknown') return;
+
+            const newName = prompt(`Enter a new name for this device:`, currentName);
+            if (newName && newName.trim() !== '') {
+                const trimmed = newName.trim();
+                detailsDeviceName.textContent = trimmed;
+                
+                // Send rename command to the server
+                sendCommand('rename_device', {
+                    deviceId: targetDeviceId,
+                    name: trimmed
+                });
+            }
         });
     }
 

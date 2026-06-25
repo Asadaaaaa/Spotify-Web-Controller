@@ -109,7 +109,12 @@
                                 <button id="btn-details-back" class="btn-icon-back" title="Back to list">
                                     <i class="fa-solid fa-chevron-left"></i>
                                 </button>
-                                <h3 id="details-device-name">Device Name</h3>
+                                <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
+                                    <h3 id="details-device-name" style="margin: 0; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">Device Name</h3>
+                                    <button id="btn-rename-device" class="btn-icon-back" title="Rename Device" style="display: none; padding: 4px 8px; margin-right: 0; margin-left: auto; transform: none;">
+                                        <i class="fa-solid fa-pen" style="font-size: 11px;"></i>
+                                    </button>
+                                </div>
                             </div>
                             <div class="details-body">
                                 <div class="details-meta">

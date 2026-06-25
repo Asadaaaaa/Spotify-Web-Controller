@@ -571,9 +571,24 @@
         async partnerAPISearch(operationName, hash, variables) {
             let token = this.capturedAccessToken;
             if (!token) {
-                let sess = Spicetify.Platform.Session.accessToken;
+                let sess = Spicetify.Platform?.Session?.accessToken;
                 if (typeof sess === 'function') sess = await sess();
                 token = typeof sess === 'string' ? sess : (sess?.accessToken || sess?.token || '');
+            }
+
+            // Fallback for clientToken extraction directly from localStorage if interception hasn't captured it yet
+            let clientToken = this.capturedClientToken;
+            if (!clientToken) {
+                try {
+                    // Try to fetch it from Spotify's local database or cookies/storage if possible
+                    for (let i = 0; i < localStorage.length; i++) {
+                        const key = localStorage.key(i);
+                        if (key && key.includes('client-token')) {
+                            clientToken = localStorage.getItem(key);
+                            break;
+                        }
+                    }
+                } catch (e) {}
             }
 
             const headers = {
@@ -584,8 +599,8 @@
                 'content-type': 'application/json;charset=UTF-8',
             };
             
-            if (this.capturedClientToken) {
-                headers['client-token'] = this.capturedClientToken;
+            if (clientToken) {
+                headers['client-token'] = clientToken;
             }
 
             const resp = await this.origFetch('https://api-partner.spotify.com/pathfinder/v2/query', {
