@@ -427,6 +427,9 @@ class SpotifyWebControllerServer {
         // Notify all web clients that Spotify is online
         this.broadcastToClients({ type: 'spotify_online', data: true });
 
+        // Broadcast current client list to the newly connected Spotify Extension
+        this.broadcastClientList();
+
         ws.on('message', (message) => {
             try {
                 const parsed = JSON.parse(message);
@@ -798,6 +801,16 @@ class SpotifyWebControllerServer {
             type: 'client_list',
             data: list
         });
+        if (this.spotifySocket && this.spotifySocket.readyState === WebSocket.OPEN) {
+            try {
+                this.spotifySocket.send(JSON.stringify({
+                    type: 'client_list',
+                    data: list
+                }));
+            } catch (err) {
+                console.error('Failed to send client list to Spotify:', err);
+            }
+        }
     }
 
     /**

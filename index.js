@@ -76,14 +76,27 @@ function stopProcess(child) {
     }
 }
 
+function closeSpotify() {
+    console.log('Closing Spotify if it is running...');
+    try {
+        if (process.platform === 'darwin') {
+            execFileSync('osascript', ['-e', 'tell application "Spotify" to quit'], { stdio: 'ignore' });
+        } else if (process.platform === 'win32') {
+            execFileSync('taskkill', ['/f', '/im', 'Spotify.exe'], { stdio: 'ignore' });
+        } else {
+            execFileSync('pkill', ['-x', 'spotify'], { stdio: 'ignore' });
+        }
+    } catch (err) {
+        // Spotify might not be running or command failed, ignore
+    }
+}
+
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function main() {
     let serverProcess = null;
-    let autoProcess = null;
 
     const shutdown = () => {
-        stopProcess(autoProcess);
         stopProcess(serverProcess);
         process.exit();
     };
@@ -92,6 +105,9 @@ async function main() {
     process.on('SIGTERM', shutdown);
 
     try {
+        closeSpotify();
+        await sleep(1500); // Give Spotify time to close
+
         installExtension();
         run('spicetify', ['config', 'extensions', extensionFileName]);
         run('spicetify', ['apply']);
@@ -99,15 +115,11 @@ async function main() {
         console.log('Waiting 2 seconds...');
         await sleep(2000);
 
-        console.log('Starting spicetify auto...');
-        autoProcess = spawn('spicetify', ['auto'], {
-            cwd: rootDir,
-            stdio: 'inherit',
-        });
+        console.log('Enabling spicetify devtools...');
+        run('spicetify', ['enable-devtools']);
 
         serverProcess = startWebControllerServer();
     } catch (err) {
-        stopProcess(autoProcess);
         stopProcess(serverProcess);
         console.error(err.message || err);
         process.exit(1);

@@ -23,6 +23,8 @@
             this.lastQueueRevision = '';
             this.lastQueueUris = '';
 
+            this.hasAttemptedAutoPlay = false;
+
             console.log("Spotify Web Controller Extension: Loading...");
 
             this.initTokenInterceptor();
@@ -560,8 +562,31 @@
                 case 'request_state':
                     this.broadcastFullState();
                     break;
+                case 'client_list':
+                    this.handleAutoPlay(data);
+                    break;
                 default:
                     console.warn("Spotify Web Controller Extension: Unknown command type:", type);
+            }
+        }
+
+        /**
+         * Automatically start music playback if the extension has connected to the server
+         * and there is at least one active web controller client.
+         */
+        handleAutoPlay(clients) {
+            if (this.hasAttemptedAutoPlay) return;
+
+            if (clients && clients.length >= 1) {
+                this.hasAttemptedAutoPlay = true;
+                console.log("Spotify Web Controller Extension: Auto-playing (Connected to server & >= 1 client connected)");
+                try {
+                    if (typeof Spicetify.Player.isPlaying === 'function' && !Spicetify.Player.isPlaying()) {
+                        Spicetify.Player.play();
+                    }
+                } catch (err) {
+                    console.error("Spotify Web Controller Extension: Auto-play failed:", err);
+                }
             }
         }
 
@@ -591,17 +616,43 @@
                 } catch (e) {}
             }
 
+            // Resolve Spotify client version dynamically instead of hardcoding
+            let spotifyVersion = '1.2.92.148';
+            try {
+                if (window.Spicetify?.Platform?.ProductState?.com?.spotify?.madprops?.['client-version']) {
+                    spotifyVersion = window.Spicetify.Platform.ProductState.com.spotify.madprops['client-version'];
+                } else if (window.Spicetify?.Platform?.UserAPI?._product_state_service?.getValues) {
+                    // Alternative extraction
+                    const values = window.Spicetify.Platform.ProductState?.values || {};
+                    if (values['client-version']) {
+                        spotifyVersion = values['client-version'];
+                    }
+                }
+            } catch (e) {
+                console.warn('[Spotify Web Controller] Failed to resolve dynamic client version:', e);
+            }
+
             const headers = {
                 'accept': 'application/json',
                 'accept-language': 'en',
                 'app-platform': 'OSX_ARM64',
                 'authorization': `Bearer ${token}`,
                 'content-type': 'application/json;charset=UTF-8',
+                'spotify-app-version': spotifyVersion,
+                'Referer': 'https://xpui.app.spotify.com/',
+                'sec-ch-ua': '"Not-A.Brand";v="24", "Chromium";v="146"',
+                'sec-ch-ua-mobile': '?0',
+                'sec-ch-ua-platform': '"macOS"',
+                'sec-fetch-dest': 'empty',
+                'sec-fetch-mode': 'cors',
+                'sec-fetch-site': 'same-site'
             };
             
             if (clientToken) {
                 headers['client-token'] = clientToken;
             }
+
+            console.log(`[Spotify Web Controller] Requesting ${operationName} with token: ${token ? 'YES' : 'NO'}, clientToken: ${clientToken ? 'YES' : 'NO'}`);
 
             const resp = await this.origFetch('https://api-partner.spotify.com/pathfinder/v2/query', {
                 method: 'POST',
@@ -615,9 +666,9 @@
 
             // Capture new tokens from successful/failed requests to keep them fresh
             try {
-                const reqHeaders = resp.headers;
                 // If the response indicates authorization issues (e.g. 401 or 403), reset token to trigger recapturing
                 if (resp.status === 401 || resp.status === 403) {
+                    console.warn(`[Spotify Web Controller] Auth error ${resp.status} - clearing tokens`);
                     this.capturedAccessToken = null;
                     this.capturedClientToken = null;
                 }
@@ -625,6 +676,7 @@
 
             if (!resp.ok) {
                 const errText = await resp.text().catch(() => '');
+                console.error(`[Spotify Web Controller] Partner API Request Failed: Status ${resp.status}, Body: ${errText}`);
                 throw new Error(`HTTP ${resp.status}: ${errText.slice(0, 200)}`);
             }
             return await resp.json();
