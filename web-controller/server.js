@@ -568,6 +568,18 @@ class SpotifyWebControllerServer {
                     const recipient = parsed.clientId || 'All Clients';
                     logger.spotify(`type: ${colors.bold}${parsed.type}${colors.reset}, recipient: ${colors.gray}${recipient}${colors.reset}`);
                 }
+                if (parsed.type === 'log_fetch_error') {
+                    try {
+                        const errorLogPath = path.join(this.cacheDir, 'spotify-fetch-errors.log');
+                        const logEntry = JSON.stringify(parsed.data) + '\n';
+                        fs.appendFileSync(errorLogPath, logEntry, 'utf8');
+                        logger.error(`Spotify Extension Fetch Error logged to spotify-fetch-errors.log: Status ${parsed.data?.status}`);
+                    } catch (e) {
+                        logger.error('Failed to write fetch error log to disk:', e);
+                    }
+                    return;
+                }
+
                 if (parsed.type === 'lyrics') {
                     if (parsed.data && !parsed.data.loading) {
                         const changed = this.cacheLyricsPayload(parsed.data);

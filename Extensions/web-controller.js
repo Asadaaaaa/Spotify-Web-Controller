@@ -698,7 +698,22 @@
 
             if (!resp.ok) {
                 const errText = await resp.text().catch(() => '');
-                console.error(`[Spotify Web Controller] Partner API Request Failed: Status ${resp.status}, Body: ${errText}`);
+                const errMsg = `Status ${resp.status}, Body: ${errText}`;
+                console.error(`[Spotify Web Controller] Partner API Request Failed: ${errMsg}`);
+                
+                // Send error log back to the server to write it into a file
+                try {
+                    this.send('log_fetch_error', {
+                        url: 'https://api-partner.spotify.com/pathfinder/v2/query',
+                        operationName,
+                        status: resp.status,
+                        errorBody: errText.slice(0, 500),
+                        hasToken: !!token,
+                        hasClientToken: !!clientToken,
+                        timestamp: new Date().toISOString()
+                    });
+                } catch (e) {}
+
                 throw new Error(`HTTP ${resp.status}: ${errText.slice(0, 200)}`);
             }
             return await resp.json();
