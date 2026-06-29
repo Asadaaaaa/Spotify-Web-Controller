@@ -14,6 +14,52 @@ const haikunator = new Haikunator({
     }
 });
 
+// ANSI escape codes for modern terminal formatting
+const colors = {
+    reset: '\x1b[0m',
+    bold: '\x1b[1m',
+    green: '\x1b[32m',
+    cyan: '\x1b[36m',
+    yellow: '\x1b[33m',
+    magenta: '\x1b[35m',
+    red: '\x1b[31m',
+    gray: '\x1b[90m'
+};
+
+function getTime() {
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${colors.gray}[${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}]${colors.reset}`;
+}
+
+const logHistory = [];
+
+const logger = {
+    info: (msg) => logToDashboard('info', `${colors.gray}[INFO]${colors.reset} ${msg}`),
+    success: (msg) => logToDashboard('success', `${colors.green}[SUCCESS]${colors.reset} ${colors.green}${msg}${colors.reset}`),
+    warn: (msg) => logToDashboard('warn', `${colors.yellow}[WARN]${colors.reset} ${colors.yellow}${msg}${colors.reset}`),
+    error: (msg, err = '') => {
+        const errMsg = err ? ` - ${err.message || err}` : '';
+        logToDashboard('error', `${colors.red}[ERROR]${colors.reset} ${colors.red}${colors.bold}${msg}${colors.reset}${errMsg}`);
+    },
+    spotify: (msg) => logToDashboard('spotify', `${colors.cyan}[Spotify]${colors.reset} ${msg}`),
+    client: (msg) => logToDashboard('client', `${colors.magenta}[Client]${colors.reset} ${msg}`),
+    system: (msg) => logToDashboard('system', `${colors.bold}${colors.green}[SYSTEM]${colors.reset} ${colors.bold}${colors.green}${msg}${colors.reset}`)
+};
+
+function logToDashboard(type, formattedMsg) {
+    const timestamp = getTime();
+    logHistory.push(`${timestamp} ${formattedMsg}`);
+    if (logHistory.length > 8) {
+        logHistory.shift();
+    }
+    if (typeof serverInstance !== 'undefined' && serverInstance) {
+        serverInstance.renderDashboard();
+    } else {
+        console.log(`${timestamp} ${formattedMsg}`);
+    }
+}
+
 class SpotifyWebControllerServer {
     constructor(port = 8080) {
         this.port = process.env.PORT || port;
@@ -36,6 +82,10 @@ class SpotifyWebControllerServer {
         }
 
         this.wss = new WebSocket.Server({ noServer: true });
+
+        this.startTime = Date.now();
+        this.currentTrackName = 'None';
+        this.currentTrackArtist = '';
 
         this.spotifySocket = null;
         this.clientSockets = new Set();
@@ -65,7 +115,7 @@ class SpotifyWebControllerServer {
                 if (filename) {
                     if (watchTimeout) clearTimeout(watchTimeout);
                     watchTimeout = setTimeout(() => {
-                        console.log(`File changed in public: ${filename}. Notifying clients to refresh.`);
+                        logger.info(`File changed in public: ${colors.cyan}${filename}${colors.reset}. Reloading clients.`);
                         this.broadcastToClients({ type: 'reload_client' });
                     }, 250);
                 }
@@ -82,7 +132,7 @@ class SpotifyWebControllerServer {
                 return JSON.parse(fs.readFileSync(this.deviceNamesPath, 'utf8'));
             }
         } catch (e) {
-            console.error('Failed to load device names:', e);
+            logger.error('Failed to load device names:', e);
         }
         return {};
     }
@@ -92,7 +142,7 @@ class SpotifyWebControllerServer {
             fs.mkdirSync(this.cacheDir, { recursive: true });
             fs.writeFileSync(this.deviceNamesPath, JSON.stringify(this.deviceNames, null, 2));
         } catch (e) {
-            console.error('Failed to save device names:', e);
+            logger.error('Failed to save device names:', e);
         }
     }
 
@@ -117,7 +167,7 @@ class SpotifyWebControllerServer {
                 keywords: Array.isArray(parsed?.keywords) ? parsed.keywords : defaults
             };
         } catch (err) {
-            console.error('Failed to load blocked keywords:', err);
+            logger.error('Failed to load blocked keywords:', err);
             return { keywords: defaults };
         }
     }
@@ -130,7 +180,7 @@ class SpotifyWebControllerServer {
             fs.mkdirSync(this.cacheDir, { recursive: true });
             fs.writeFileSync(this.blockedKeywordsPath, JSON.stringify(this.blockedKeywords, null, 2));
         } catch (err) {
-            console.error('Failed to save blocked keywords:', err);
+            logger.error('Failed to save blocked keywords:', err);
         }
     }
 
@@ -150,7 +200,7 @@ class SpotifyWebControllerServer {
                 lyrics: parsed.lyrics && typeof parsed.lyrics === 'object' ? parsed.lyrics : {}
             };
         } catch (err) {
-            console.error('Failed to load lyrics cache:', err);
+            logger.error('Failed to load lyrics cache:', err);
             return { version: 1, lyrics: {} };
         }
     }
@@ -163,7 +213,7 @@ class SpotifyWebControllerServer {
             fs.mkdirSync(this.cacheDir, { recursive: true });
             fs.writeFileSync(this.lyricsCachePath, JSON.stringify(this.lyricsCache, null, 2));
         } catch (err) {
-            console.error('Failed to save lyrics cache:', err);
+            logger.error('Failed to save lyrics cache:', err);
         }
     }
 
@@ -351,7 +401,7 @@ class SpotifyWebControllerServer {
                 this.broadcastToClients({ type: 'lyrics', data: { ...payload, cached: false } });
             }
         } catch (err) {
-            console.error('Failed to refresh lyrics cache:', err);
+            logger.error('Failed to refresh lyrics cache:', err);
         } finally {
             this.lyricsRefreshInFlight.delete(trackKey);
         }
@@ -359,6 +409,8 @@ class SpotifyWebControllerServer {
 
     handlePlaybackState(data) {
         if (!data?.track) return;
+        this.currentTrackName = data.track.title || 'None';
+        this.currentTrackArtist = data.track.artist || '';
 
         const hadCache = this.sendCachedLyrics(data.track);
         if (!hadCache) {
@@ -421,7 +473,7 @@ class SpotifyWebControllerServer {
      * Manage Spicetify Extension connection and relays
      */
     handleSpotifyConnection(ws) {
-        console.log('Spotify Extension connected!');
+        logger.success('Spotify Extension connected!');
         this.spotifySocket = ws;
 
         // Notify all web clients that Spotify is online
@@ -433,7 +485,10 @@ class SpotifyWebControllerServer {
         ws.on('message', (message) => {
             try {
                 const parsed = JSON.parse(message);
-                console.log(`[Spotify -> Server] type: ${parsed.type}, clientId: ${parsed.clientId || 'none'}`);
+                if (parsed.type !== 'progress') {
+                    const recipient = parsed.clientId || 'All Clients';
+                    logger.spotify(`type: ${colors.bold}${parsed.type}${colors.reset}, recipient: ${colors.gray}${recipient}${colors.reset}`);
+                }
                 if (parsed.type === 'lyrics') {
                     if (parsed.data && !parsed.data.loading) {
                         const changed = this.cacheLyricsPayload(parsed.data);
@@ -477,23 +532,23 @@ class SpotifyWebControllerServer {
                     this.handlePlaybackState(parsed.data);
                 }
             } catch (err) {
-                console.error('Error parsing message from Spotify:', err);
+                logger.error('Error parsing message from Spotify:', err);
             }
         });
 
         ws.on('close', () => {
-            console.log('Spotify Extension disconnected!');
+            logger.warn('Spotify Extension disconnected!');
             this.spotifySocket = null;
             this.broadcastToClients({ type: 'spotify_online', data: false });
         });
 
         ws.on('error', (err) => {
-            console.error('Spotify socket error:', err);
+            logger.error('Spotify socket error:', err);
         });
     }
 
     handleClientConnection(ws, request) {
-        console.log('Web Client connected!');
+        logger.success('Web Client connected!');
         ws.clientId = crypto.randomUUID();
         
         // Extract persistent deviceId from request query parameters
@@ -502,7 +557,7 @@ class SpotifyWebControllerServer {
             const urlObj = new URL(request.url, `http://${request.headers.host || 'localhost'}`);
             deviceId = urlObj.searchParams.get('deviceId') || crypto.randomUUID();
         } catch (e) {
-            console.error('Failed to parse connection URL query params:', e);
+            logger.error('Failed to parse connection URL query params:', e);
             deviceId = crypto.randomUUID();
         }
         ws.deviceId = deviceId;
@@ -696,13 +751,13 @@ class SpotifyWebControllerServer {
                         type: 'blocked_keywords',
                         data: { keywords: newKeywords }
                     });
-                    console.log(`[Blocked Keywords] Updated by ${ws.clientName}. Count: ${newKeywords.length}`);
+                    logger.client(`Blocked keywords updated by ${colors.bold}${ws.clientName}${colors.reset}. Count: ${newKeywords.length}`);
                     return;
                 }
 
                 // Attach client ID to request so we can route back to this specific client
                 parsed.clientId = ws.clientId;
-                console.log(`[Client -> Server] type: ${parsed.type}, clientId: ${parsed.clientId}`);
+                logger.client(`type: ${colors.bold}${parsed.type}${colors.reset}, clientId: ${colors.gray}${parsed.clientId}${colors.reset}`);
 
                 // Track who requested which song
                 if (parsed.type === 'add_queue' && typeof parsed.data === 'string') {
@@ -720,22 +775,22 @@ class SpotifyWebControllerServer {
                 if (this.spotifySocket && this.spotifySocket.readyState === WebSocket.OPEN) {
                     this.spotifySocket.send(JSON.stringify(parsed));
                 } else {
-                    console.log('Command ignored: Spotify is not connected.');
+                    logger.warn('Command ignored: Spotify is not connected.');
                     ws.send(JSON.stringify({ type: 'error', data: 'Spotify is not connected.', clientId: ws.clientId }));
                 }
             } catch (err) {
-                console.error('Error parsing message from Client:', err);
+                logger.error('Error parsing message from Client:', err);
             }
         });
 
         ws.on('close', () => {
-            console.log('Web Client disconnected.');
+            logger.warn('Web Client disconnected.');
             this.clientSockets.delete(ws);
             this.broadcastClientList();
         });
 
         ws.on('error', (err) => {
-            console.error('Client socket error:', err);
+            logger.error('Client socket error:', err);
             this.clientSockets.delete(ws);
             this.broadcastClientList();
         });
@@ -781,9 +836,9 @@ class SpotifyWebControllerServer {
 
             fs.mkdirSync(this.cacheDir, { recursive: true });
             fs.writeFileSync(historyFile, JSON.stringify(history, null, 2));
-            console.log(`[History Log] Device: ${deviceId} (${clientName}) -> Action: ${action}`);
+            logger.info(`History Log: Device: ${colors.bold}${clientName}${colors.reset} (${deviceId.substring(0, 8)}) -> Action: ${colors.cyan}${action}${colors.reset}`);
         } catch (err) {
-            console.error('Failed to log action:', err);
+            logger.error('Failed to log action:', err);
         }
     }
 
@@ -808,7 +863,7 @@ class SpotifyWebControllerServer {
                     data: list
                 }));
             } catch (err) {
-                console.error('Failed to send client list to Spotify:', err);
+                logger.error('Failed to send client list to Spotify:', err);
             }
         }
     }
@@ -855,45 +910,142 @@ class SpotifyWebControllerServer {
         return ips;
     }
 
+    renderDashboard() {
+        console.clear();
+        const uptimeSec = Math.floor((Date.now() - this.startTime) / 1000);
+        const hrs = String(Math.floor(uptimeSec / 3600)).padStart(2, '0');
+        const mins = String(Math.floor((uptimeSec % 3600) / 60)).padStart(2, '0');
+        const secs = String(uptimeSec % 60).padStart(2, '0');
+        const uptimeStr = `${hrs}:${mins}:${secs}`;
+
+        const spotifyStatus = this.spotifySocket && this.spotifySocket.readyState === WebSocket.OPEN
+            ? `${colors.green}${colors.bold}ONLINE${colors.reset}`
+            : `${colors.red}${colors.bold}OFFLINE${colors.reset}`;
+
+        const deviceCount = this.clientSockets.size;
+
+        const wrapAndPad = (content, width = 78) => {
+            const ansiRegex = /\x1b\[[0-9;]*m/g;
+            const chunks = [];
+            let currentVisualLen = 0;
+            let currentChunk = '';
+            let activeStyles = [];
+
+            let i = 0;
+            while (i < content.length) {
+                if (content.substring(i).startsWith('\x1b[')) {
+                    const endIdx = content.indexOf('m', i);
+                    if (endIdx !== -1) {
+                        const style = content.substring(i, endIdx + 1);
+                        currentChunk += style;
+                        if (style === '\x1b[0m') {
+                            activeStyles = [];
+                        } else {
+                            activeStyles.push(style);
+                        }
+                        i = endIdx + 1;
+                        continue;
+                    }
+                }
+                currentChunk += content[i];
+                currentVisualLen++;
+                if (currentVisualLen === width) {
+                    if (activeStyles.length > 0) {
+                        currentChunk += '\x1b[0m';
+                    }
+                    chunks.push(currentChunk);
+                    currentChunk = activeStyles.join('');
+                    currentVisualLen = 0;
+                }
+                i++;
+            }
+            if (currentVisualLen > 0 || chunks.length === 0) {
+                if (activeStyles.length > 0 && !currentChunk.endsWith('\x1b[0m')) {
+                    currentChunk += '\x1b[0m';
+                }
+                chunks.push(currentChunk);
+            }
+            return chunks.map(chunk => {
+                const visual = chunk.replace(ansiRegex, '');
+                const padding = Math.max(0, width - visual.length);
+                return `│  ${chunk}${' '.repeat(padding)}  │`;
+            });
+        };
+
+        console.log(`\n${colors.bold}${colors.magenta}┌──────────────────────────────────────────────────────────────────────────────────┐${colors.reset}`);
+        console.log(`${colors.bold}${colors.magenta}│       🎵  Spotify Web Controller Server Dashboard                                │${colors.reset}`);
+        console.log(`${colors.bold}${colors.magenta}├──────────────────────────────────────────────────────────────────────────────────┤${colors.reset}`);
+        
+        const uptimePrefix = `Uptime: ${colors.cyan}${uptimeStr}${colors.reset}`;
+        const uptimePrefixVisual = `Uptime: ${uptimeStr}`;
+        const line1 = uptimePrefix + ' '.repeat(Math.max(1, 27 - uptimePrefixVisual.length)) + `Spotify Extension: ${spotifyStatus}`;
+        wrapAndPad(line1).forEach(l => console.log(l));
+
+        const devicesPrefix = `Total Devices Connected: ${colors.bold}${colors.yellow}${deviceCount}${colors.reset}`;
+        const devicesPrefixVisual = `Total Devices Connected: ${deviceCount}`;
+        const line2 = devicesPrefix + ' '.repeat(Math.max(1, 27 - devicesPrefixVisual.length)) + `GitHub: ${colors.gray}github.com/Asadaaaaa/Spotify-Web-Controller${colors.reset}`;
+        wrapAndPad(line2).forEach(l => console.log(l));
+        
+        console.log(`${colors.bold}${colors.magenta}├──────────────────────────────────────────────────────────────────────────────────┤${colors.reset}`);
+        const trackDisplay = `Now Playing: ${this.currentTrackName}${this.currentTrackArtist ? ' - ' + this.currentTrackArtist : ''}`;
+        wrapAndPad(`${colors.bold}${colors.green}${trackDisplay}${colors.reset}`).forEach(l => console.log(l));
+        console.log(`${colors.bold}${colors.magenta}├──────────────────────────────────────────────────────────────────────────────────┤${colors.reset}`);
+        wrapAndPad(`Recent Activity Log:`).forEach(l => console.log(l));
+        
+        // Print logs
+        logHistory.forEach(logLine => {
+            wrapAndPad(logLine).forEach(l => console.log(l));
+        });
+        
+        console.log(`${colors.bold}${colors.magenta}└──────────────────────────────────────────────────────────────────────────────────┘${colors.reset}`);
+        
+        // Also print the server listening details at the bottom
+        console.log(`\n${colors.bold}${colors.green}➜${colors.reset}  Local Access:   ${colors.cyan}http://localhost:${this.port}${colors.reset}`);
+        const localIPs = this.getLocalIPs();
+        if (localIPs.length > 0) {
+            localIPs.forEach(ip => {
+                console.log(`${colors.bold}${colors.green}➜${colors.reset}  Network Access: ${colors.cyan}http://${ip}:${this.port}${colors.reset}`);
+            });
+        }
+        console.log();
+    }
+
     /**
      * Start Express server listening
      */
     start() {
         // Start HTTP Server
         this.server.listen(this.port, () => {
-            console.log('\n======================================================');
-            console.log(`Spotify Web Controller Server (HTTP) is running on port ${this.port}`);
-            console.log('======================================================');
-            console.log(`Access locally: http://localhost:${this.port}`);
-            
+            logger.system(`HTTP Server running on port ${colors.bold}${this.port}${colors.reset}`);
             const localIPs = this.getLocalIPs();
+            console.log(`${getTime()} │  ${colors.bold}${colors.green}➜${colors.reset}  Local:   ${colors.cyan}http://localhost:${this.port}${colors.reset}`);
             if (localIPs.length > 0) {
-                console.log('\nTo control Spotify from other devices (HTTP):');
                 localIPs.forEach(ip => {
-                    console.log(`👉 http://${ip}:${this.port}`);
+                    console.log(`${getTime()} │  ${colors.bold}${colors.green}➜${colors.reset}  Network: ${colors.cyan}http://${ip}:${this.port}${colors.reset}`);
                 });
             }
-            console.log('======================================================\n');
+            console.log(`${getTime()} └──────────────────────────────────────────────────`);
         });
 
         // Start HTTPS Server if certificates are available
         if (this.httpsServer) {
             this.httpsServer.listen(this.httpsPort, () => {
-                console.log('======================================================');
-                console.log(`Spotify Web Controller Server (HTTPS) is running on port ${this.httpsPort}`);
-                console.log('======================================================');
-                console.log(`Access securely: https://localhost:${this.httpsPort}`);
-                
+                logger.system(`HTTPS Server running on port ${colors.bold}${this.httpsPort}${colors.reset}`);
                 const localIPs = this.getLocalIPs();
+                console.log(`${getTime()} │  ${colors.bold}${colors.green}➜${colors.reset}  Local:   ${colors.cyan}https://localhost:${this.httpsPort}${colors.reset}`);
                 if (localIPs.length > 0) {
-                    console.log('\nTo control Spotify from other devices (HTTPS/Picture-in-Picture):');
                     localIPs.forEach(ip => {
-                        console.log(`👉 https://${ip}:${this.httpsPort}`);
+                        console.log(`${getTime()} │  ${colors.bold}${colors.green}➜${colors.reset}  Network: ${colors.cyan}https://${ip}:${this.httpsPort}${colors.reset}`);
                     });
                 }
-                console.log('======================================================\n');
+                console.log(`${getTime()} └──────────────────────────────────────────────────`);
             });
         }
+
+        // Periodically refresh the dashboard (every second) to update the live uptime timer
+        setInterval(() => {
+            this.renderDashboard();
+        }, 1000);
     }
 }
 

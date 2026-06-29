@@ -1,0 +1,10 @@
+{
+  "name": "spotify-web-controller-root",
+  "version": "1.0.0",
+  "description": "Root runner for Spotify Web Controller",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "private": true
+}
