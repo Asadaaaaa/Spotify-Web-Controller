@@ -1007,6 +1007,14 @@ class SpotifyWebControllerServer {
                 console.log(`${colors.bold}${colors.green}➜${colors.reset}  Network Access: ${colors.cyan}http://${ip}:${this.port}${colors.reset}`);
             });
         }
+
+        if (this.httpsServer) {
+            if (localIPs.length > 0) {
+                localIPs.forEach(ip => {
+                    console.log(`${colors.bold}${colors.green}➜${colors.reset}  Network HTTPS:  ${colors.cyan}https://${ip}:${this.httpsPort}${colors.reset}`);
+                });
+            }
+        }
         console.log();
     }
 
