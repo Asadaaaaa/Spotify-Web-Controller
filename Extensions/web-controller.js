@@ -42,7 +42,10 @@
             window.fetch = async function(url, opts) {
                 try {
                     const urlStr = typeof url === 'string' ? url : (url?.url || '');
-                    if (urlStr.includes('api-partner.spotify.com')) {
+                    const isSpotifyApi = urlStr.includes('api-partner.spotify.com') || 
+                                         urlStr.includes('spclient.spotify.com') || 
+                                         urlStr.includes('spotify.com');
+                    if (isSpotifyApi) {
                         const headers = opts?.headers || {};
                         
                         // Extract headers with case insensitivity
@@ -73,7 +76,10 @@
                 // Second interception pass on response to capture updated tokens if they are passed in headers
                 try {
                     const urlStr = typeof url === 'string' ? url : (url?.url || '');
-                    if (urlStr.includes('api-partner.spotify.com') && res.ok) {
+                    const isSpotifyApi = urlStr.includes('api-partner.spotify.com') || 
+                                         urlStr.includes('spclient.spotify.com') || 
+                                         urlStr.includes('spotify.com');
+                    if (isSpotifyApi && res.ok) {
                         const resHeaders = res.headers;
                         if (resHeaders) {
                             const newClientToken = resHeaders.get('client-token') || resHeaders.get('Client-Token');
