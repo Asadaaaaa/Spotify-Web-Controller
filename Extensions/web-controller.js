@@ -38,7 +38,7 @@
          */
         initTokenInterceptor() {
             const self = this;
-            window.fetch = function(url, opts) {
+            window.fetch = async function(url, opts) {
                 try {
                     const urlStr = typeof url === 'string' ? url : (url?.url || '');
                     if (urlStr.includes('api-partner.spotify.com')) {
@@ -65,7 +65,25 @@
                 } catch (err) {
                     console.error("Spotify Web Controller Extension: Error in token interceptor:", err);
                 }
-                return self.origFetch(url, opts);
+                
+                // Call original fetch
+                const res = await self.origFetch(url, opts);
+                
+                // Second interception pass on response to capture updated tokens if they are passed in headers
+                try {
+                    const urlStr = typeof url === 'string' ? url : (url?.url || '');
+                    if (urlStr.includes('api-partner.spotify.com') && res.ok) {
+                        const resHeaders = res.headers;
+                        if (resHeaders) {
+                            const newClientToken = resHeaders.get('client-token') || resHeaders.get('Client-Token');
+                            if (newClientToken) {
+                                self.capturedClientToken = newClientToken;
+                            }
+                        }
+                    }
+                } catch (e) {}
+                
+                return res;
             };
         }
 
@@ -594,11 +612,15 @@
          * Send a query to the partner API using GraphQL operation hashes
          */
         async partnerAPISearch(operationName, hash, variables) {
-            let token = this.capturedAccessToken;
-            if (!token) {
+            let token = null;
+            try {
                 let sess = Spicetify.Platform?.Session?.accessToken;
                 if (typeof sess === 'function') sess = await sess();
                 token = typeof sess === 'string' ? sess : (sess?.accessToken || sess?.token || '');
+            } catch (e) {}
+
+            if (!token) {
+                token = this.capturedAccessToken;
             }
 
             // Fallback for clientToken extraction directly from localStorage if interception hasn't captured it yet
