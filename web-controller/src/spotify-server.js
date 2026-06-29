@@ -15,6 +15,7 @@ const ActionHistoryManager = require('./action-history');
 const GitHubStarsManager = require('./github');
 const Dashboard = require('./dashboard');
 const spotifyApi = require('./spotify-api');
+const PlaybackCacheManager = require('./playback-cache');
 
 
 class SpotifyWebControllerServer {
@@ -43,9 +44,6 @@ class SpotifyWebControllerServer {
         this.wss = new WebSocket.Server({ noServer: true });
 
         this.startTime = Date.now();
-        this.currentTrackName = 'None';
-        this.currentTrackArtist = '';
-
         this.spotifySocket = null;
         this.clientSockets = new Set();
         
@@ -53,6 +51,13 @@ class SpotifyWebControllerServer {
         this.serverId = crypto.randomUUID();
 
         // Instantiate Sub-Managers
+        this.playbackCacheManager = new PlaybackCacheManager(this.cacheDir);
+
+        const cachedState = this.playbackCacheManager.getState();
+        this.currentTrackName = cachedState?.track?.title || 'None';
+        this.currentTrackArtist = cachedState?.track?.artist || '';
+        this.trackRequesters = this.playbackCacheManager.getTrackRequesters();
+
         this.blockedKeywordsManager = new BlockedKeywordsManager(this.cacheDir);
         this.deviceManager = new DeviceManager(this.cacheDir);
         
@@ -208,23 +213,30 @@ class SpotifyWebControllerServer {
                 // Enrich track information with requestedBy before broadcasting
                 if (parsed.type === 'state' && parsed.data?.track) {
                     const uri = parsed.data.track.uri;
-                    if (this.trackRequesters && this.trackRequesters[uri]) {
-                        parsed.data.track.requestedBy = this.trackRequesters[uri];
+                    const reqInfo = this.trackRequesters && this.trackRequesters[uri];
+                    if (reqInfo) {
+                        parsed.data.track.requestedBy = typeof reqInfo === 'string' ? reqInfo : reqInfo.name;
+                        parsed.data.track.requestedAt = typeof reqInfo === 'string' ? null : reqInfo.timestamp;
                     }
+                    this.playbackCacheManager.setState(parsed.data);
                 } else if (parsed.type === 'queue' && parsed.data) {
                     if (!this.trackRequesters) this.trackRequesters = {};
-                    if (parsed.data.current && this.trackRequesters[parsed.data.current.uri]) {
-                        parsed.data.current.requestedBy = this.trackRequesters[parsed.data.current.uri];
-                    }
+                    
+                    const enrichTrack = (track) => {
+                        if (track && this.trackRequesters[track.uri]) {
+                            const reqInfo = this.trackRequesters[track.uri];
+                            track.requestedBy = typeof reqInfo === 'string' ? reqInfo : reqInfo.name;
+                            track.requestedAt = typeof reqInfo === 'string' ? null : reqInfo.timestamp;
+                        }
+                    };
+
+                    enrichTrack(parsed.data.current);
                     ['next', 'nextInQueue', 'nextUp', 'prev'].forEach(key => {
                         if (Array.isArray(parsed.data[key])) {
-                            parsed.data[key].forEach(track => {
-                                if (track && this.trackRequesters[track.uri]) {
-                                    track.requestedBy = this.trackRequesters[track.uri];
-                                }
-                            });
+                            parsed.data[key].forEach(enrichTrack);
                         }
                     });
+                    this.playbackCacheManager.setQueue(parsed.data);
                 }
 
                 this.broadcastToClients(parsed);
@@ -299,6 +311,15 @@ class SpotifyWebControllerServer {
             type: 'blocked_keywords',
             data: { keywords: this.blockedKeywordsManager.getKeywords() }
         }));
+
+        const cachedState = this.playbackCacheManager.getState();
+        if (cachedState) {
+            ws.send(JSON.stringify({ type: 'state', data: cachedState }));
+        }
+        const cachedQueue = this.playbackCacheManager.getQueue();
+        if (cachedQueue) {
+            ws.send(JSON.stringify({ type: 'queue', data: cachedQueue }));
+        }
 
         if (this.spotifySocket && this.spotifySocket.readyState === 1) { // WebSocket.OPEN
             this.spotifySocket.send(JSON.stringify({ type: 'request_state' }));
@@ -403,7 +424,11 @@ class SpotifyWebControllerServer {
 
                 if (parsed.type === 'add_queue' && typeof parsed.data === 'string') {
                     if (!this.trackRequesters) this.trackRequesters = {};
-                    this.trackRequesters[parsed.data] = ws.clientName;
+                    this.trackRequesters[parsed.data] = {
+                        name: ws.clientName,
+                        timestamp: Date.now()
+                    };
+                    this.playbackCacheManager.setTrackRequesters(this.trackRequesters);
                 }
 
                 if (['add_queue', 'reorder_queue', 'next', 'back'].includes(parsed.type)) {

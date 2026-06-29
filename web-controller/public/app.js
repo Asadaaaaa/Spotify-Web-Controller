@@ -91,6 +91,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Application State
     let socket = null;
     let isConnected = false;
+    let isSpotifyOnline = false;
     let myClientId = null;
     let myClientName = '';
     let playbackState = {
@@ -462,6 +463,7 @@ document.addEventListener('DOMContentLoaded', () => {
         socket.onclose = () => {
             console.log('Connection lost. Reconnecting in 3s...');
             isConnected = false;
+            isSpotifyOnline = false;
             setOfflineState();
             setTimeout(connectWS, 3000);
         };
@@ -477,11 +479,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 switch (type) {
                     case 'spotify_online':
-                        if (data) {
-                            offlineScreen.classList.remove('active');
-                        } else {
-                            setOfflineState();
-                        }
+                        isSpotifyOnline = !!data;
+                        updateOfflineScreenState();
                         break;
                     case 'client_registered':
                         if (data.serverId) {
@@ -519,6 +518,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         break;
                     case 'state':
                         updatePlayerUI(data);
+                        updateOfflineScreenState();
                         break;
                     case 'progress':
                         updateProgressUI(data.progress);
@@ -553,6 +553,62 @@ document.addEventListener('DOMContentLoaded', () => {
         offlineScreen.classList.add('active');
         stopProgressInterpolation();
         closeMobileLyricsView();
+    }
+
+    function updateOfflineScreenState() {
+        const badge = document.getElementById('spotify-status-badge');
+        if (badge) {
+            if (isSpotifyOnline) {
+                badge.textContent = 'Online';
+                badge.className = 'status-badge online';
+                badge.style.background = 'rgba(48, 209, 88, 0.15)';
+                badge.style.color = '#30d158';
+                badge.style.borderColor = 'rgba(48, 209, 88, 0.3)';
+            } else {
+                badge.textContent = 'Offline';
+                badge.className = 'status-badge offline';
+                badge.style.background = 'rgba(255, 69, 58, 0.15)';
+                badge.style.color = '#ff453a';
+                badge.style.borderColor = 'rgba(255, 69, 58, 0.3)';
+            }
+        }
+
+        const hasTrack = playbackState && playbackState.track && playbackState.track.title && playbackState.track.title !== 'None';
+        if (isSpotifyOnline || hasTrack) {
+            offlineScreen.classList.remove('active');
+        } else {
+            offlineScreen.classList.add('active');
+            stopProgressInterpolation();
+            closeMobileLyricsView();
+        }
+    }
+
+    function formatRequestTime(timestamp) {
+        if (!timestamp) return '';
+        const now = new Date();
+        const date = new Date(timestamp);
+        
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        const seconds = String(date.getSeconds()).padStart(2, '0');
+        const timeStr = `${hours}:${minutes}:${seconds}`;
+        
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const target = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        
+        const diffTime = today.getTime() - target.getTime();
+        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+        
+        if (diffDays === 0) {
+            return timeStr;
+        } else if (diffDays === 1) {
+            return `Yesterday, ${timeStr}`;
+        } else {
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const year = date.getFullYear();
+            return `${day}/${month}/${year}, ${timeStr}`;
+        }
     }
 
     // --- GitHub Stars Fetch ---
@@ -709,7 +765,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const reqEl = document.getElementById('track-request-by');
             if (reqEl) {
                 if (playbackState.track.requestedBy) {
-                    reqEl.innerHTML = `<i class="fa-solid fa-circle-user"></i> Requested by: <strong>${playbackState.track.requestedBy}</strong>`;
+                    let timeStr = '';
+                    if (playbackState.track.requestedAt) {
+                        timeStr = ` <span style="color: var(--text-muted); font-weight: 400; margin-left: 2px;">at ${formatRequestTime(playbackState.track.requestedAt)}</span>`;
+                    }
+                    reqEl.innerHTML = `<i class="fa-solid fa-circle-user"></i> Requested by: <strong>${playbackState.track.requestedBy}</strong>${timeStr}`;
                     reqEl.style.display = 'block';
                 } else {
                     reqEl.style.display = 'none';
@@ -1305,11 +1365,18 @@ document.addEventListener('DOMContentLoaded', () => {
         // Render current track in Queue tab
         if (queueData.current) {
             const artUrl = getImageUrl(queueData.current.albumArt) || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=50';
-            const reqHTML = queueData.current.requestedBy ? `
-                <span class="track-requested-by" style="font-size: 10px; color: var(--primary); font-weight: 600; display: inline-flex; align-items: center; gap: 4px; margin-top: 2px;">
-                    <i class="fa-solid fa-circle-user" style="font-size: 8px;"></i> ${queueData.current.requestedBy}
-                </span>
-            ` : '';
+            let reqHTML = '';
+            if (queueData.current.requestedBy) {
+                let timeStr = '';
+                if (queueData.current.requestedAt) {
+                    timeStr = ` • <span style="color: var(--text-muted); font-weight: 400; display: inline-flex; align-items: center; gap: 4px;"><i class="fa-regular fa-clock" style="font-size: 8px;"></i> ${formatRequestTime(queueData.current.requestedAt)}</span>`;
+                }
+                reqHTML = `
+                    <span class="track-requested-by" style="font-size: 10px; color: var(--primary); font-weight: 600; display: inline-flex; align-items: center; gap: 4px; margin-top: 2px;">
+                        <i class="fa-solid fa-circle-user" style="font-size: 8px;"></i> ${queueData.current.requestedBy}${timeStr}
+                    </span>
+                `;
+            }
             queueCurrentItem.innerHTML = `
                 <div class="track-item" style="background: rgba(30, 215, 96, 0.08); border-color: rgba(30, 215, 96, 0.2)">
                     <div class="track-item-left">
@@ -1364,11 +1431,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 `;
             }
 
-            const reqHTML = track.requestedBy ? `
-                <span class="track-requested-by" style="font-size: 10px; color: var(--primary); font-weight: 600; display: inline-flex; align-items: center; gap: 4px; margin-top: 2px;">
-                    <i class="fa-solid fa-circle-user" style="font-size: 8px;"></i> ${track.requestedBy}
-                </span>
-            ` : '';
+            let reqHTML = '';
+            if (track.requestedBy) {
+                let timeStr = '';
+                if (track.requestedAt) {
+                    timeStr = ` • <span style="color: var(--text-muted); font-weight: 400; display: inline-flex; align-items: center; gap: 4px;"><i class="fa-regular fa-clock" style="font-size: 8px;"></i> ${formatRequestTime(track.requestedAt)}</span>`;
+                }
+                reqHTML = `
+                    <span class="track-requested-by" style="font-size: 10px; color: var(--primary); font-weight: 600; display: inline-flex; align-items: center; gap: 4px; margin-top: 2px;">
+                        <i class="fa-solid fa-circle-user" style="font-size: 8px;"></i> ${track.requestedBy}${timeStr}
+                    </span>
+                `;
+            }
 
             trackItem.innerHTML = `
                 <div class="track-item-left">
