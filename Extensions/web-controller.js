@@ -812,6 +812,38 @@
                 this.send('debug', { msg: 'searchModalResults error', error: e.message }, clientId);
             }
 
+            // Try searchDesktop fallback (Spotify native search query)
+            try {
+                const json = await this.partnerAPISearch(
+                    'searchDesktop',
+                    'eff59fa0a3d026b88b56fddbcf4bdfa16a186b8175a5c1a358c072e053c2e5b0',
+                    {
+                        searchTerm: trimmed,
+                        offset: 0,
+                        limit: 10,
+                        numberOfTopResults: 5,
+                        includeAudiobooks: true,
+                        includeArtistHasConcertsField: false,
+                        includePreReleases: true,
+                        includeAlbumPreReleases: false,
+                        includeAuthors: false,
+                        includeEpisodeContentRatingsV2: false,
+                        isPrefix: null,
+                        sectionFilters: ['GENERIC']
+                    }
+                );
+                if (json?.data) {
+                    const tracks = this.parseTracksFromResponse(json.data);
+                    this.send('debug', { msg: 'searchDesktop', tracks: tracks.length }, clientId);
+                    if (tracks.length > 0) {
+                        cacheAndSend(tracks);
+                        return;
+                    }
+                }
+            } catch (e) {
+                this.send('debug', { msg: 'searchDesktop error', error: e.message }, clientId);
+            }
+
             this.send('debug', { msg: 'all failed', hasToken: !!this.capturedAccessToken, hasClientToken: !!this.capturedClientToken }, clientId);
             this.send('search_results', { query: trimmed, tracks: [] }, clientId);
         }
