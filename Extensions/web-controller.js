@@ -869,6 +869,26 @@
                 this.send('debug', { msg: 'searchDesktop error', error: e.message }, clientId);
             }
 
+            // Try official Spotify Web API fallback via backend server
+            try {
+                this.send('debug', { msg: 'Attempting Official API search fallback...' }, clientId);
+                const resp = await this.origFetch(`http://localhost:8080/api/search?q=${encodeURIComponent(trimmed)}`);
+                if (resp.ok) {
+                    const result = await resp.json();
+                    if (result && Array.isArray(result.tracks) && result.tracks.length > 0) {
+                        this.send('debug', { msg: 'officialApiFallback', tracks: result.tracks.length }, clientId);
+                        cacheAndSend(result.tracks);
+                        return;
+                    } else if (result.error) {
+                        this.send('debug', { msg: 'officialApiFallback error response', error: result.error }, clientId);
+                    }
+                } else {
+                    this.send('debug', { msg: 'officialApiFallback status error', status: resp.status }, clientId);
+                }
+            } catch (e) {
+                this.send('debug', { msg: 'officialApiFallback error', error: e.message }, clientId);
+            }
+
             this.send('debug', { msg: 'all failed', hasToken: !!this.capturedAccessToken, hasClientToken: !!this.capturedClientToken }, clientId);
             this.send('search_results', { query: trimmed, tracks: [] }, clientId);
         }

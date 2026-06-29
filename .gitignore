@@ -22,3 +22,10 @@ yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
 pnpm-debug.log*
+
+# Environment Config
+.env
+.env.local
+web-controller/.env
+web-controller/.env.local
+

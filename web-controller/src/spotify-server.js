@@ -14,6 +14,8 @@ const LyricsManager = require('./lyrics');
 const ActionHistoryManager = require('./action-history');
 const GitHubStarsManager = require('./github');
 const Dashboard = require('./dashboard');
+const spotifyApi = require('./spotify-api');
+
 
 class SpotifyWebControllerServer {
     constructor(port = 8080) {
@@ -114,6 +116,20 @@ class SpotifyWebControllerServer {
             } catch (err) {
                 logger.error('Failed to get GitHub stars:', err);
                 res.status(500).json({ error: 'Failed to fetch GitHub stars' });
+            }
+        });
+
+        this.app.get('/api/search', async (req, res) => {
+            try {
+                const query = req.query.q || '';
+                if (!query) {
+                    return res.status(400).json({ error: 'Missing query parameter q' });
+                }
+                const result = await spotifyApi.searchTracks(query);
+                res.json(result);
+            } catch (err) {
+                logger.error('Failed to execute fallback search:', err);
+                res.status(500).json({ error: 'Failed to search tracks via fallback API' });
             }
         });
     }
