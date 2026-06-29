@@ -1804,6 +1804,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         btnRenameDevice.style.display = 'none';
                     }
 
+                    // Only show device ID if accessing from localhost
+                    if (detailsMetaId && detailsMetaId.parentElement) {
+                        detailsMetaId.parentElement.style.display = isLocalhost ? 'flex' : 'none';
+                    }
+
                     // Clear history container and show loading state
                     detailsHistoryContainer.innerHTML = '<div style="padding: 10px; text-align: center; color: var(--text-muted); font-size: 11px;">Loading history...</div>';
                     
