@@ -560,12 +560,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const badgeRight = document.querySelector('#github-stars-badge .github-stars-right span');
         if (!badgeRight) return;
         try {
-            const response = await fetch('https://api.github.com/repos/Asadaaaaa/Spotify-Web-Controller');
+            const response = await fetch('/api/github-stars');
             if (response.ok) {
                 const data = await response.json();
-                if (data && typeof data.stargazers_count === 'number') {
+                if (data && typeof data.stars === 'number') {
                     // Format with commas, e.g., 193,734
-                    badgeRight.textContent = data.stargazers_count.toLocaleString();
+                    badgeRight.textContent = data.stars.toLocaleString();
                 }
             }
         } catch (error) {
