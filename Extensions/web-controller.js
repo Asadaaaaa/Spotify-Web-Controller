@@ -12,6 +12,7 @@
             this.lastVolume = typeof Spicetify.Player.getVolume === 'function' ? Spicetify.Player.getVolume() : 0.5;
             this.capturedClientToken = null;
             this.capturedAccessToken = null;
+            this.lastFailedToken = null; // Track expired tokens to force refresh
             this.origFetch = window.fetch.bind(window);
             
             // Cache settings
@@ -614,10 +615,25 @@
         async partnerAPISearch(operationName, hash, variables) {
             let token = null;
             try {
+                // Try retrieving fresh access token directly from Spicetify session
                 let sess = Spicetify.Platform?.Session?.accessToken;
                 if (typeof sess === 'function') sess = await sess();
                 token = typeof sess === 'string' ? sess : (sess?.accessToken || sess?.token || '');
-            } catch (e) {}
+                
+                // If the session token matches the last captured invalid token, attempt to trigger session refresh
+                if (token && token === this.lastFailedToken) {
+                    console.log("[Spotify Web Controller] Session token is flagged as expired. Requesting session refresh...");
+                    if (typeof Spicetify.Platform?.Session?.requestToken === 'function') {
+                        await Spicetify.Platform.Session.requestToken();
+                    }
+                    // Fetch token again post-refresh attempt
+                    sess = Spicetify.Platform?.Session?.accessToken;
+                    if (typeof sess === 'function') sess = await sess();
+                    token = typeof sess === 'string' ? sess : (sess?.accessToken || sess?.token || '');
+                }
+            } catch (e) {
+                console.warn("[Spotify Web Controller] Failed to resolve token from Spicetify Platform Session:", e);
+            }
 
             if (!token) {
                 token = this.capturedAccessToken;
@@ -691,8 +707,11 @@
                 // If the response indicates authorization issues (e.g. 401 or 403), reset token to trigger recapturing
                 if (resp.status === 401 || resp.status === 403) {
                     console.warn(`[Spotify Web Controller] Auth error ${resp.status} - clearing tokens`);
+                    this.lastFailedToken = token; // Mark this token as expired
                     this.capturedAccessToken = null;
                     this.capturedClientToken = null;
+                } else if (resp.ok) {
+                    this.lastFailedToken = null; // Clear if request succeeded
                 }
             } catch (e) {}
 
