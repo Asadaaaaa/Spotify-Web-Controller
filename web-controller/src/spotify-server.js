@@ -112,6 +112,17 @@ class SpotifyWebControllerServer {
     }
 
     initMiddleware(publicDir) {
+        // Enable CORS for client requests (e.g. from Spicetify running in a different origin)
+        this.app.use((req, res, next) => {
+            res.header('Access-Control-Allow-Origin', '*');
+            res.header('Access-Control-Allow-Headers', '*');
+            res.header('Access-Control-Allow-Methods', '*');
+            if (req.method === 'OPTIONS') {
+                return res.sendStatus(200);
+            }
+            next();
+        });
+
         this.app.use(express.static(publicDir));
 
         this.app.get('/api/github-stars', async (req, res) => {
